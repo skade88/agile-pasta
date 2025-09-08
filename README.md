@@ -126,6 +126,7 @@ GLOBAL|hire_date >= '2023-01-01'|Only employees hired in 2023 or later
 FIELD|employee_name|name|Copy employee name
 FIELD|annual_salary|salary * 12|Convert monthly to annual salary
 FIELD|department_name|UPPER(department)|Convert department to uppercase
+FIELD|formatted_name|TITLE(name)|Convert name to title case
 FIELD|full_name|first_name + " " + last_name|Combine first and last name
 ```
 
@@ -158,6 +159,7 @@ FIELD|full_name|first_name + " " + last_name|Combine names with space
 FIELD|annual_salary|salary * 12|Convert monthly to annual salary
 FIELD|upper_name|UPPER(name)|Convert name to uppercase
 FIELD|lower_dept|LOWER(department)|Convert department to lowercase
+FIELD|title_name|TITLE(name)|Convert name to title case
 FIELD|greeting|"Hello, " + name + "!"|Add greeting with punctuation
 ```
 
@@ -174,6 +176,7 @@ FIELD|greeting|"Hello, " + name + "!"|Add greeting with punctuation
 #### Functions
 - `UPPER(field)` - Convert to uppercase
 - `LOWER(field)` - Convert to lowercase
+- `TITLE(field)` - Convert to title case (first letter of each word uppercase, rest lowercase)
 - `field1 + field2` - String concatenation
 - `field * number` - Numeric multiplication
 
