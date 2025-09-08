@@ -1,0 +1,4 @@
+FIELD|greeting_message|"Hello World!"|Static greeting message
+FIELD|constant_value|42|Static constant value
+FIELD|system_info|"Agile Pasta v1.0"|Static system information
+FIELD|formatted_text|"Status: " + "Active"|Static formatted text with concatenation
