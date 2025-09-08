@@ -59,3 +59,6 @@ Makefile
 
 # Output files
 examples/output/*.csv
+
+# Large test datasets (use scripts/generate_large_dataset.py to recreate)
+examples/input/large_employees.psv

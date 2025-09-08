@@ -193,14 +193,35 @@ FIELD|greeting|"Hello, " + name + "!"|Add greeting with punctuation
 ```
 project/
 ├── input/
-│   ├── employees.psv
-│   ├── employees_Headers.psv
-│   ├── departments.psv
-│   └── departments_Headers.psv
+│   ├── employees.psv              # Sample employee data (10 records)
+│   ├── employees_Headers.psv      # Headers for employee data
+│   ├── departments.psv            # Sample department data (6 records)
+│   ├── departments_Headers.psv    # Headers for department data
+│   └── large_employees.psv        # Large dataset (2M records, ~120MB)
+│       large_employees_Headers.psv # Headers for large dataset
 └── output/
-    ├── summary_Headers.psv
-    └── summary_Rules.psv
+    ├── employee_summary_Headers.psv # Output column definitions
+    └── employee_summary_Rules.psv   # Transformation rules
 ```
+
+## Large Dataset Example
+
+The repository includes a large-scale example with **2 million employee records** (~120MB) to demonstrate performance with very large datasets:
+
+- **File**: `examples/input/large_employees.psv`
+- **Records**: 2,000,000 synthetic employee records
+- **Size**: ~120MB
+- **Performance**: Processes ~1.2M filtered records in minutes
+
+### Generating the Large Dataset
+
+If the large dataset file is not present, generate it using:
+
+```bash
+python3 scripts/generate_large_dataset.py
+```
+
+This creates realistic synthetic data compatible with existing transformation rules.
 
 ## Performance Features
 
