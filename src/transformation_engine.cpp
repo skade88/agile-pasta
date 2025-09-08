@@ -128,6 +128,44 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
         }
     }
     
+    // Check for unmapped output fields and warn
+    std::vector<std::string> unmapped_fields;
+    for (const auto& output_header : output_headers_) {
+        bool has_rule = false;
+        bool has_direct_mapping = false;
+        
+        // Check if there's a FIELD rule for this output header
+        for (const auto& rule : rules_) {
+            if (rule.type == TransformationRule::RuleType::FIELD && 
+                rule.target_field == output_header) {
+                has_rule = true;
+                break;
+            }
+        }
+        
+        // Check if there's a direct header mapping
+        if (!has_rule) {
+            auto it = std::find(source_headers.begin(), source_headers.end(), output_header);
+            if (it != source_headers.end()) {
+                has_direct_mapping = true;
+            }
+        }
+        
+        // If neither rule nor direct mapping exists, this field will be empty
+        if (!has_rule && !has_direct_mapping) {
+            unmapped_fields.push_back(output_header);
+        }
+    }
+    
+    // Warn about unmapped fields
+    if (!unmapped_fields.empty()) {
+        std::cerr << "Warning: The following output fields have no transformation rules and no matching input headers:" << std::endl;
+        for (const auto& field : unmapped_fields) {
+            std::cerr << "  - " << field << " (will be empty)" << std::endl;
+        }
+        std::cerr << "Consider adding FIELD transformation rules for these fields." << std::endl;
+    }
+    
     // Apply field transformations
     for (const auto& input_row : filtered_rows) {
         std::vector<std::string> output_row;
