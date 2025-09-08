@@ -130,6 +130,8 @@ FIELD|formatted_name|TITLE(name)|Convert name to title case
 FIELD|full_name|first_name + " " + last_name|Combine first and last name
 ```
 
+**Note:** If an output field doesn't have a transformation rule and doesn't match any input header name, the system will generate a warning and produce empty values for that field.
+
 ## Transformation Rules
 
 ### Global Rules
@@ -201,8 +203,44 @@ project/
 │       large_employees_Headers.psv # Headers for large dataset
 └── output/
     ├── employee_summary_Headers.psv # Output column definitions
-    └── employee_summary_Rules.psv   # Transformation rules
+    ├── employee_summary_Rules.psv   # Transformation rules
+    ├── employee_dept_report_Headers.psv # Different output format
+    ├── employee_dept_report_Rules.psv   # Rules for different format
+    └── header_mismatch_test_Headers.psv # Example with non-matching headers
+        header_mismatch_test_Rules.psv   # Complete field mappings required
 ```
+
+## Working with Non-Matching Header Names
+
+The system supports output configurations where header names don't match input header names. This is demonstrated in the `header_mismatch_test` example:
+
+**Input headers** (`employees_Headers.psv`):
+```
+emp_id|name|position|hire_date|salary|department
+```
+
+**Output headers** (`header_mismatch_test_Headers.psv`):
+```
+customer_id|customer_full_name|job_title|start_date|monthly_pay|work_division
+```
+
+**Required transformation rules** (`header_mismatch_test_Rules.psv`):
+```
+GLOBAL|salary >= '75000'|Only employees with salary >= 75000
+FIELD|customer_id|emp_id|Map employee ID to customer ID
+FIELD|customer_full_name|UPPER(name)|Convert employee name to uppercase
+FIELD|job_title|TITLE(position)|Convert position to title case
+FIELD|start_date|hire_date|Map hire date to start date
+FIELD|monthly_pay|salary|Map salary to monthly pay
+FIELD|work_division|LOWER(department)|Convert department to lowercase
+```
+
+**Important:** When output header names don't match input header names, you must provide explicit `FIELD` transformation rules for every output column. If any output column lacks a transformation rule and doesn't have a matching input header name, the application will:
+
+1. Generate a warning message
+2. Produce empty values for those columns
+
+This ensures data integrity and makes missing mappings visible to users.
 
 ## Large Dataset Example
 

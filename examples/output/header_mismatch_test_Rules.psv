@@ -1,0 +1,7 @@
+GLOBAL|salary >= '75000'|Only employees with salary >= 75000
+FIELD|customer_id|emp_id|Map employee ID to customer ID
+FIELD|customer_full_name|UPPER(name)|Convert employee name to uppercase
+FIELD|job_title|TITLE(position)|Convert position to title case
+FIELD|start_date|hire_date|Map hire date to start date
+FIELD|monthly_pay|salary|Map salary to monthly pay
+FIELD|work_division|LOWER(department)|Convert department to lowercase
