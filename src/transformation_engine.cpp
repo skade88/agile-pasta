@@ -225,6 +225,28 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
     // If not a simple field reference, process as an expression
     std::string result_expression = expression;
     
+    // Extract and preserve quoted string literals first
+    // Handle both double quotes (new syntax) and single quotes (backward compatibility)
+    std::vector<std::pair<std::string, std::string>> string_literals;
+    std::regex double_quote_regex("\"([^\"]*)\"");
+    std::regex single_quote_regex("'([^']*)'");
+    std::smatch match;
+    int literal_counter = 0;
+    
+    // First handle double quotes (preferred)
+    while (std::regex_search(result_expression, match, double_quote_regex)) {
+        std::string placeholder = "__STRING_LITERAL_" + std::to_string(literal_counter++) + "__";
+        string_literals.push_back(std::make_pair(placeholder, match[1].str()));
+        result_expression = std::regex_replace(result_expression, double_quote_regex, placeholder, std::regex_constants::format_first_only);
+    }
+    
+    // Then handle single quotes (for backward compatibility)
+    while (std::regex_search(result_expression, match, single_quote_regex)) {
+        std::string placeholder = "__STRING_LITERAL_" + std::to_string(literal_counter++) + "__";
+        string_literals.push_back(std::make_pair(placeholder, match[1].str()));
+        result_expression = std::regex_replace(result_expression, single_quote_regex, placeholder, std::regex_constants::format_first_only);
+    }
+    
     // Replace field references with actual values
     for (size_t i = 0; i < input_headers.size() && i < input_row.size(); ++i) {
         const std::string& header = input_headers[i];
@@ -233,12 +255,24 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
         // Replace all occurrences of the header name with the value
         size_t pos = 0;
         while ((pos = result_expression.find(header, pos)) != std::string::npos) {
-            // Make sure it's a whole word
+            // Make sure it's a whole word and not part of a placeholder
             bool is_start_ok = (pos == 0 || !std::isalnum(result_expression[pos-1]));
             bool is_end_ok = (pos + header.length() == result_expression.length() || 
                              !std::isalnum(result_expression[pos + header.length()]));
             
-            if (is_start_ok && is_end_ok) {
+            // Also check it's not part of a string literal placeholder
+            bool is_in_placeholder = false;
+            for (const auto& literal : string_literals) {
+                size_t placeholder_pos = result_expression.find(literal.first);
+                if (placeholder_pos != std::string::npos &&
+                    pos >= placeholder_pos && 
+                    pos < placeholder_pos + literal.first.length()) {
+                    is_in_placeholder = true;
+                    break;
+                }
+            }
+            
+            if (is_start_ok && is_end_ok && !is_in_placeholder) {
                 result_expression.replace(pos, header.length(), value);
                 pos += value.length();
             } else {
@@ -247,17 +281,25 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
         }
     }
     
+    // Restore string literals
+    for (const auto& literal : string_literals) {
+        size_t pos = result_expression.find(literal.first);
+        if (pos != std::string::npos) {
+            result_expression.replace(pos, literal.first.length(), literal.second);
+        }
+    }
+    
     // Handle simple expressions
     if (result_expression.find(" + ") != std::string::npos) {
-        // String concatenation
+        // String concatenation - be more careful about what we trim
         std::stringstream ss(result_expression);
         std::string part;
         std::string result;
         
         while (std::getline(ss, part, '+')) {
-            // Trim whitespace and quotes
-            part.erase(0, part.find_first_not_of(" \t'\""));
-            part.erase(part.find_last_not_of(" \t'\"") + 1);
+            // Only trim whitespace, not quotes - the quotes should already be handled by string literal processing
+            part.erase(0, part.find_first_not_of(" \t"));
+            part.erase(part.find_last_not_of(" \t") + 1);
             result += part;
         }
         
