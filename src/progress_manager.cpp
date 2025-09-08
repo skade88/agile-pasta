@@ -1,6 +1,7 @@
 #include "progress_manager.h"
 #include <indicators/progress_bar.hpp>
 #include <indicators/block_progress_bar.hpp>
+#include <indicators/cursor_control.hpp>
 
 std::unique_ptr<indicators::ProgressBar> ProgressManager::create_file_progress(
     const std::string& filename, size_t total_size) {
@@ -58,9 +59,18 @@ std::unique_ptr<indicators::BlockProgressBar> ProgressManager::create_overall_pr
 }
 
 void ProgressManager::update_progress(indicators::ProgressBar& bar, size_t current) {
+#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
+    // On Windows, explicitly erase the line before updating to prevent 
+    // progress bars from creating new lines instead of updating in place
+    indicators::erase_line();
+#endif
     bar.set_progress(current);
 }
 
 void ProgressManager::complete_progress(indicators::ProgressBar& bar) {
+#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
+    // On Windows, explicitly erase the line before completing to ensure clean output
+    indicators::erase_line();
+#endif
     bar.mark_as_completed();
 }
