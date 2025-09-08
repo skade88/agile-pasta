@@ -221,11 +221,13 @@ bool QueryEngine::evaluate_condition(const PsvRecord& record,
 }
 
 std::vector<std::string> QueryEngine::parse_join_condition(const std::string& condition) {
-    // Parse condition like "left_table.field = right_table.field"
-    std::regex join_regex(R"((\w+\.\w+)\s*=\s*(\w+\.\w+))");
+    // Parse condition like "left_table.field = right_table.field" or "field1 = field2"
+    
+    // Try prefixed format first: "table.field = table.field"
+    std::regex prefixed_regex(R"((\w+\.\w+)\s*=\s*(\w+\.\w+))");
     std::smatch match;
     
-    if (std::regex_match(condition, match, join_regex)) {
+    if (std::regex_match(condition, match, prefixed_regex)) {
         std::string left_part = match[1].str();
         std::string right_part = match[2].str();
         
@@ -239,6 +241,15 @@ std::vector<std::string> QueryEngine::parse_join_condition(const std::string& co
                 right_part.substr(right_dot + 1)
             };
         }
+    }
+    
+    // Try simple format: "field1 = field2"
+    std::regex simple_regex(R"((\w+)\s*=\s*(\w+))");
+    if (std::regex_match(condition, match, simple_regex)) {
+        return {
+            match[1].str(),
+            match[2].str()
+        };
     }
     
     return {};
