@@ -1,0 +1,5 @@
+GLOBAL|salary >= '75000'|Only employees with salary >= 75000
+FIELD|full_name|name|Copy employee name
+FIELD|position_title|UPPER(position)|Convert position to uppercase
+FIELD|department_info|department + " Dept"|Add 'Dept' suffix to department  
+FIELD|salary_category|"$" + salary|Add dollar sign prefix to salary

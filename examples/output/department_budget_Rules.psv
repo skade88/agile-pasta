@@ -1,0 +1,4 @@
+GLOBAL|budget >= '200000'|Only departments with budget >= 200000
+FIELD|dept_name|TITLE(department_name)|Convert department name to title case
+FIELD|total_budget|budget|Copy budget amount
+FIELD|manager_id_formatted|"MGR-" + manager_id|Add MGR prefix to manager ID
