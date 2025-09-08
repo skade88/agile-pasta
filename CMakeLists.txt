@@ -30,19 +30,6 @@ else()
     endif()
 endif()
 
-# Source files
-set(SOURCES
-    src/main.cpp
-    src/command_line_parser.cpp
-    src/file_scanner.cpp
-    src/psv_parser.cpp
-    src/database.cpp
-    src/query_engine.cpp
-    src/transformation_engine.cpp
-    src/csv_writer.cpp
-    src/progress_manager.cpp
-)
-
 # Header files
 set(HEADERS
     include/command_line_parser.h
@@ -55,16 +42,8 @@ set(HEADERS
     include/progress_manager.h
 )
 
-# Create executable
-add_executable(agile-pasta ${SOURCES} ${HEADERS})
-
-# Link libraries
-target_link_libraries(agile-pasta PRIVATE Threads::Threads)
-
-# Filesystem library for older compilers
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
-    target_link_libraries(agile-pasta PRIVATE stdc++fs)
-endif()
+# Create executable with just main.cpp
+add_executable(agile-pasta src/main.cpp ${HEADERS})
 
 # Set output directory
 set_target_properties(agile-pasta PROPERTIES
@@ -73,3 +52,89 @@ set_target_properties(agile-pasta PROPERTIES
 
 # Install target
 install(TARGETS agile-pasta DESTINATION bin)
+
+# Enable testing
+include(CTest)
+enable_testing()
+
+# Find Google Test
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GTEST gtest)
+    pkg_check_modules(GTEST_MAIN gtest_main)
+endif()
+
+if(NOT GTEST_FOUND)
+    # Try to find system-installed Google Test
+    find_package(GTest QUIET)
+    if(GTest_FOUND OR GTEST_FOUND)
+        set(GTEST_LIBRARIES ${GTEST_LIBRARIES} gtest)
+        set(GTEST_MAIN_LIBRARIES ${GTEST_MAIN_LIBRARIES} gtest_main)
+    else()
+        # Install Google Test using package manager
+        message(STATUS "Google Test not found. Installing via package manager...")
+        find_program(APT_GET apt-get)
+        if(APT_GET)
+            execute_process(COMMAND apt-get update)
+            execute_process(COMMAND apt-get install -y libgtest-dev)
+            find_package(GTest REQUIRED)
+            set(GTEST_LIBRARIES gtest)
+            set(GTEST_MAIN_LIBRARIES gtest_main)
+        else()
+            message(FATAL_ERROR "Could not find or install Google Test")
+        endif()
+    endif()
+endif()
+
+# Test executable
+set(TEST_SOURCES
+    tests/test_main.cpp
+    tests/test_command_line_parser.cpp
+    tests/test_psv_parser.cpp
+    tests/test_database.cpp
+    tests/test_query_engine.cpp
+    tests/test_transformation_engine.cpp
+    tests/test_csv_writer.cpp
+    tests/test_file_scanner.cpp
+    tests/test_integration.cpp
+)
+
+# Create separate object library for the main application code (excluding main.cpp)
+set(LIB_SOURCES
+    src/command_line_parser.cpp
+    src/file_scanner.cpp
+    src/psv_parser.cpp
+    src/database.cpp
+    src/query_engine.cpp
+    src/transformation_engine.cpp
+    src/csv_writer.cpp
+    src/progress_manager.cpp
+)
+
+add_library(agile-pasta-lib STATIC ${LIB_SOURCES} ${HEADERS})
+target_link_libraries(agile-pasta-lib PRIVATE Threads::Threads)
+
+# Link filesystem library for older compilers
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+    target_link_libraries(agile-pasta-lib PRIVATE stdc++fs)
+endif()
+
+# Update main executable to use the library
+target_link_libraries(agile-pasta PRIVATE agile-pasta-lib)
+
+# Create test executable only if Google Test is available
+if(GTEST_FOUND OR GTest_FOUND)
+    add_executable(agile-pasta-tests ${TEST_SOURCES})
+    target_link_libraries(agile-pasta-tests 
+        PRIVATE 
+        agile-pasta-lib
+        ${GTEST_LIBRARIES}
+        ${GTEST_MAIN_LIBRARIES}
+        Threads::Threads
+    )
+    
+    # Add tests to CTest
+    add_test(NAME AgileProTastaUnitTests COMMAND agile-pasta-tests)
+else()
+    message(WARNING "Google Test not found. Unit tests will not be built.")
+endif()
