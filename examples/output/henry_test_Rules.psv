@@ -1,3 +1,0 @@
-GLOBAL|salary >= '100000'|Only Henry Taylor should match
-FIELD|employee_name|name|Copy name
-FIELD|salary|salary|Copy salary

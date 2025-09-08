@@ -143,10 +143,16 @@ RULE FORMAT
         Format: GLOBAL|<condition>|<description>
         Example: GLOBAL|department = 'Engineering'|Only engineering employees
         
+        If-else format: GLOBAL|<condition> ? ACCEPT : REJECT|<description>
+        Example: GLOBAL|salary >= '75000' ? ACCEPT : REJECT|Only high earners
+        
     FIELD rules:
         Applied to transform specific output fields
         Format: FIELD|<output_field>|<expression>|<description>
         Example: FIELD|full_name|first_name + ' ' + last_name|Combine names
+        
+        If-else format: FIELD|<output_field>|<condition> ? <value1> : <value2>|<description>
+        Example: FIELD|status|salary >= '80000' ? 'High' : 'Standard'|Salary tier
 
 EXAMPLES
     # Show help information
