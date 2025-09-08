@@ -61,7 +61,9 @@ std::unique_ptr<indicators::BlockProgressBar> ProgressManager::create_overall_pr
 void ProgressManager::update_progress(indicators::ProgressBar& bar, size_t current) {
 #if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
     // On Windows, explicitly erase the line before updating to prevent 
-    // progress bars from creating new lines instead of updating in place
+    // progress bars from creating new lines instead of updating in place.
+    // On Linux, the indicators library handles in-place updates natively,
+    // so erase_line() is not needed and actually interferes with proper display.
     indicators::erase_line();
 #endif
     bar.set_progress(current);
@@ -69,7 +71,8 @@ void ProgressManager::update_progress(indicators::ProgressBar& bar, size_t curre
 
 void ProgressManager::complete_progress(indicators::ProgressBar& bar) {
 #if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
-    // On Windows, explicitly erase the line before completing to ensure clean output
+    // On Windows, explicitly erase the line before completing to ensure clean output.
+    // On Linux, the indicators library handles completion properly without manual erasing.
     indicators::erase_line();
 #endif
     bar.mark_as_completed();
