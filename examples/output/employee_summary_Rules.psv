@@ -1,0 +1,4 @@
+FIELD|employee_name|name|Copy employee name
+FIELD|annual_salary|salary|Copy monthly salary as annual
+FIELD|department_name|department|Copy department name
+FIELD|years_since_hire|1|Default to 1 year for new hires
