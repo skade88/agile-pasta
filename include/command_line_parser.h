@@ -7,12 +7,14 @@ struct CommandLineArgs {
     enum class Command {
         HELP,
         TRANSFORM,
+        SANITY_CHECK,
         INVALID
     };
     
     Command command = Command::INVALID;
     std::string input_path;
     std::string output_path;
+    std::string sanity_check_path;  // For sanity check command
     bool show_help = false;
 };
 
