@@ -92,9 +92,10 @@ TEST_F(FileScannerTest, ScanEmptyInputDirectory) {
 }
 
 TEST_F(FileScannerTest, ScanNonExistentInputDirectory) {
-    auto files = FileScanner::scan_input_files((test_dir / "nonexistent").string());
-    
-    EXPECT_TRUE(files.empty());
+    EXPECT_THROW(
+        FileScanner::scan_input_files((test_dir / "nonexistent").string()),
+        std::runtime_error
+    );
 }
 
 TEST_F(FileScannerTest, ScanInputWithSubdirectories) {
@@ -185,9 +186,10 @@ TEST_F(FileScannerTest, ScanEmptyOutputDirectory) {
 }
 
 TEST_F(FileScannerTest, ScanNonExistentOutputDirectory) {
-    auto files = FileScanner::scan_output_files((test_dir / "nonexistent").string());
-    
-    EXPECT_TRUE(files.empty());
+    EXPECT_THROW(
+        FileScanner::scan_output_files((test_dir / "nonexistent").string()),
+        std::runtime_error
+    );
 }
 
 // Test file size calculation

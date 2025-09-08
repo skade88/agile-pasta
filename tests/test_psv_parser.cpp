@@ -56,9 +56,10 @@ TEST_F(PsvParserTest, ParseHeadersWithSpaces) {
 TEST_F(PsvParserTest, ParseEmptyHeaders) {
     createTestFile("empty_headers.psv", "");
     
-    auto headers = PsvParser::parse_headers(test_dir / "empty_headers.psv");
-    
-    EXPECT_TRUE(headers.empty());
+    EXPECT_THROW(
+        PsvParser::parse_headers(test_dir / "empty_headers.psv"),
+        std::runtime_error
+    );
 }
 
 TEST_F(PsvParserTest, ParseSingleHeader) {

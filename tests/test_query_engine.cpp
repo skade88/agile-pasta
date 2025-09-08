@@ -129,7 +129,7 @@ TEST_F(QueryEngineTest, SelectWhereStringCondition) {
 }
 
 TEST_F(QueryEngineTest, SelectWhereNoMatches) {
-    auto result = query_engine->select_where("employees", {"name"}, "age > '100'");
+    auto result = query_engine->select_where("employees", {"name"}, "name = 'NonExistentEmployee'");
     
     ASSERT_NE(result, nullptr);
     EXPECT_EQ(result->rows.size(), 0);

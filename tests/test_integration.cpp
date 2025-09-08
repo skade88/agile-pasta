@@ -216,14 +216,16 @@ TEST_F(IntegrationTest, FileScanningIntegration) {
 // Test error handling integration
 TEST_F(IntegrationTest, ErrorHandlingIntegration) {
     // Test with missing input files
-    auto input_files = FileScanner::scan_input_files((test_dir / "nonexistent").string());
-    EXPECT_TRUE(input_files.empty());
+    EXPECT_THROW(
+        FileScanner::scan_input_files((test_dir / "nonexistent").string()),
+        std::runtime_error
+    );
     
     // Test with invalid PSV files
     createFile(input_dir / "invalid.psv", "malformed|data|without|proper|structure");
     createFile(input_dir / "invalid_Headers.psv", "header1|header2");
     
-    input_files = FileScanner::scan_input_files(input_dir.string());
+    auto input_files = FileScanner::scan_input_files(input_dir.string());
     if (!input_files.empty()) {
         Database database;
         // Should handle gracefully
@@ -241,23 +243,25 @@ TEST_F(IntegrationTest, ErrorHandlingIntegration) {
 // Test command line parsing integration
 TEST_F(IntegrationTest, CommandLineParsingIntegration) {
     // Test help command
-    char* help_argv[] = {"agile-pasta", "help"};
-    auto help_args = CommandLineParser::parse(2, help_argv);
+    const char* help_argv[] = {"agile-pasta", "help"};
+    auto help_args = CommandLineParser::parse(2, const_cast<char**>(help_argv));
     EXPECT_EQ(help_args.command, CommandLineArgs::Command::HELP);
     
-    // Test transform command
-    char* transform_argv[] = {"agile-pasta", "transform", "--in", 
-                             const_cast<char*>(input_dir.string().c_str()), 
-                             "--out", const_cast<char*>(output_dir.string().c_str())};
-    auto transform_args = CommandLineParser::parse(6, transform_argv);
+    // Test transform command - use static strings for lifetime safety
+    std::string input_path_str = input_dir.string();
+    std::string output_path_str = output_dir.string();
+    const char* transform_argv[] = {"agile-pasta", "transform", "--in", 
+                             input_path_str.c_str(), 
+                             "--out", output_path_str.c_str()};
+    auto transform_args = CommandLineParser::parse(6, const_cast<char**>(transform_argv));
     EXPECT_EQ(transform_args.command, CommandLineArgs::Command::TRANSFORM);
     EXPECT_EQ(transform_args.input_path, input_dir.string());
     EXPECT_EQ(transform_args.output_path, output_dir.string());
     
     // Test sanity check command
-    char* check_argv[] = {"agile-pasta", "check", "--out", 
-                         const_cast<char*>(output_dir.string().c_str())};
-    auto check_args = CommandLineParser::parse(4, check_argv);
+    const char* check_argv[] = {"agile-pasta", "check", "--out", 
+                         output_path_str.c_str()};
+    auto check_args = CommandLineParser::parse(4, const_cast<char**>(check_argv));
     EXPECT_EQ(check_args.command, CommandLineArgs::Command::SANITY_CHECK);
     EXPECT_EQ(check_args.sanity_check_path, output_dir.string());
 }
