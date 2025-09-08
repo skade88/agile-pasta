@@ -53,35 +53,29 @@ set_target_properties(agile-pasta PROPERTIES
 # Install target
 install(TARGETS agile-pasta DESTINATION bin)
 
-# Enable testing
-include(CTest)
-enable_testing()
+# Enable testing only if requested
+option(BUILD_TESTING "Build tests" OFF)
 
-# Find Google Test
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(GTEST gtest)
-    pkg_check_modules(GTEST_MAIN gtest_main)
-endif()
+if(BUILD_TESTING)
+    include(CTest)
+    enable_testing()
 
-if(NOT GTEST_FOUND)
-    # Try to find system-installed Google Test
-    find_package(GTest QUIET)
-    if(GTest_FOUND OR GTEST_FOUND)
-        set(GTEST_LIBRARIES ${GTEST_LIBRARIES} gtest)
-        set(GTEST_MAIN_LIBRARIES ${GTEST_MAIN_LIBRARIES} gtest_main)
-    else()
-        # Install Google Test using package manager
-        message(STATUS "Google Test not found. Installing via package manager...")
-        find_program(APT_GET apt-get)
-        if(APT_GET)
-            execute_process(COMMAND apt-get update)
-            execute_process(COMMAND apt-get install -y libgtest-dev)
-            find_package(GTest REQUIRED)
-            set(GTEST_LIBRARIES gtest)
-            set(GTEST_MAIN_LIBRARIES gtest_main)
+    # Find Google Test
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(GTEST gtest)
+        pkg_check_modules(GTEST_MAIN gtest_main)
+    endif()
+
+    if(NOT GTEST_FOUND)
+        # Try to find system-installed Google Test
+        find_package(GTest QUIET)
+        if(GTest_FOUND OR GTEST_FOUND)
+            set(GTEST_LIBRARIES ${GTEST_LIBRARIES} gtest)
+            set(GTEST_MAIN_LIBRARIES ${GTEST_MAIN_LIBRARIES} gtest_main)
         else()
-            message(FATAL_ERROR "Could not find or install Google Test")
+            message(WARNING "Google Test not found. Tests will not be built.")
+            set(BUILD_TESTING OFF)
         endif()
     endif()
 endif()
@@ -122,8 +116,8 @@ endif()
 # Update main executable to use the library
 target_link_libraries(agile-pasta PRIVATE agile-pasta-lib)
 
-# Create test executable only if Google Test is available
-if(GTEST_FOUND OR GTest_FOUND)
+# Create test executable only if BUILD_TESTING is enabled and Google Test is available
+if(BUILD_TESTING AND (GTEST_FOUND OR GTest_FOUND))
     add_executable(agile-pasta-tests ${TEST_SOURCES})
     target_link_libraries(agile-pasta-tests 
         PRIVATE 
@@ -135,6 +129,4 @@ if(GTEST_FOUND OR GTest_FOUND)
     
     # Add tests to CTest
     add_test(NAME AgileProTastaUnitTests COMMAND agile-pasta-tests)
-else()
-    message(WARNING "Google Test not found. Unit tests will not be built.")
 endif()
