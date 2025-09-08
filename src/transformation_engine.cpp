@@ -81,31 +81,59 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
     std::unique_ptr<QueryResult> source_data;
     std::vector<std::string> source_headers;
     
-    // Try to find a table that contains most of the fields we need
-    for (const auto& table_name : table_names) {
-        const PsvTable* table = database_.get_table(table_name);
-        if (!table) continue;
-        
-        // Count how many of our required fields are in this table
-        int field_matches = 0;
-        for (const auto& rule : rules_) {
-            if (rule.type == TransformationRule::RuleType::FIELD) {
+    // Check if we have any field rules that reference input fields
+    bool has_input_field_references = false;
+    for (const auto& rule : rules_) {
+        if (rule.type == TransformationRule::RuleType::FIELD) {
+            // Check if the rule condition references any input field
+            for (const auto& table_name : table_names) {
+                const PsvTable* table = database_.get_table(table_name);
+                if (!table) continue;
+                
                 if (std::find(table->headers.begin(), table->headers.end(), rule.condition) != table->headers.end()) {
-                    field_matches++;
+                    has_input_field_references = true;
+                    break;
                 }
             }
-        }
-        
-        // Use this table if it has the most matches
-        if (field_matches > 0) {
-            source_data = query_engine_.select(table_name);
-            source_headers = table->headers;
-            break; // Use first matching table for now
+            if (has_input_field_references) break;
         }
     }
     
-    if (!source_data) {
-        return result; // No suitable source data
+    // If we have input field references, find a suitable source table
+    if (has_input_field_references) {
+        // Try to find a table that contains most of the fields we need
+        for (const auto& table_name : table_names) {
+            const PsvTable* table = database_.get_table(table_name);
+            if (!table) continue;
+            
+            // Count how many of our required fields are in this table
+            int field_matches = 0;
+            for (const auto& rule : rules_) {
+                if (rule.type == TransformationRule::RuleType::FIELD) {
+                    if (std::find(table->headers.begin(), table->headers.end(), rule.condition) != table->headers.end()) {
+                        field_matches++;
+                    }
+                }
+            }
+            
+            // Use this table if it has the most matches
+            if (field_matches > 0) {
+                source_data = query_engine_.select(table_name);
+                source_headers = table->headers;
+                break; // Use first matching table for now
+            }
+        }
+        
+        if (!source_data) {
+            return result; // No suitable source data
+        }
+    } else {
+        // All field rules are static (no input field references)
+        // Create a single empty row to process static rules
+        source_data = std::make_unique<QueryResult>();
+        source_data->headers = {};
+        source_data->rows = {{}};  // Single empty row
+        source_headers = {};
     }
     
     // Apply global rules (filtering)
