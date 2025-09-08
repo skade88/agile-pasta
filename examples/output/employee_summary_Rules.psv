@@ -1,0 +1,5 @@
+GLOBAL|salary >= '75000'|Only employees with salary >= 75000
+FIELD|employee_name|UPPER(name)|Convert name to uppercase
+FIELD|annual_salary|salary|Copy salary as annual (simplified)
+FIELD|department_name|LOWER(department)|Convert department to lowercase
+FIELD|years_since_hire|2|Default to 2 years for demo
