@@ -86,14 +86,19 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
     for (const auto& rule : rules_) {
         if (rule.type == TransformationRule::RuleType::FIELD) {
             // Check if the rule condition references any input field
+            // This includes direct field references, complex expressions, and if-else conditions
             for (const auto& table_name : table_names) {
                 const PsvTable* table = database_.get_table(table_name);
                 if (!table) continue;
                 
-                if (std::find(table->headers.begin(), table->headers.end(), rule.condition) != table->headers.end()) {
-                    has_input_field_references = true;
-                    break;
+                // Check if rule.condition contains any field name
+                for (const auto& header : table->headers) {
+                    if (rule.condition.find(header) != std::string::npos) {
+                        has_input_field_references = true;
+                        break;
+                    }
                 }
+                if (has_input_field_references) break;
             }
             if (has_input_field_references) break;
         }
@@ -110,8 +115,12 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
             int field_matches = 0;
             for (const auto& rule : rules_) {
                 if (rule.type == TransformationRule::RuleType::FIELD) {
-                    if (std::find(table->headers.begin(), table->headers.end(), rule.condition) != table->headers.end()) {
-                        field_matches++;
+                    // Check if rule.condition contains any field name from this table
+                    for (const auto& header : table->headers) {
+                        if (rule.condition.find(header) != std::string::npos) {
+                            field_matches++;
+                            break; // Count each rule only once per table
+                        }
                     }
                 }
             }
@@ -279,6 +288,38 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
                                            const std::vector<std::string>& input_headers) {
     std::string expression = rule.condition;
     
+    // Check for if-else (ternary) syntax: condition ? value1 : value2
+    std::regex ternary_regex(R"((.+?)\s*\?\s*(.+?)\s*:\s*(.+))");
+    std::smatch ternary_match;
+    
+    if (std::regex_match(expression, ternary_match, ternary_regex)) {
+        std::string condition_part = ternary_match[1].str();
+        std::string true_value = ternary_match[2].str();
+        std::string false_value = ternary_match[3].str();
+        
+        // Trim whitespace from all parts
+        condition_part.erase(0, condition_part.find_first_not_of(" \t"));
+        condition_part.erase(condition_part.find_last_not_of(" \t") + 1);
+        true_value.erase(0, true_value.find_first_not_of(" \t"));
+        true_value.erase(true_value.find_last_not_of(" \t") + 1);
+        false_value.erase(0, false_value.find_first_not_of(" \t"));
+        false_value.erase(false_value.find_last_not_of(" \t") + 1);
+        
+        // Evaluate the condition part
+        bool condition_result = evaluate_simple_condition(condition_part, input_row, input_headers);
+        
+        // Apply transformation to the chosen value
+        std::string chosen_value = condition_result ? true_value : false_value;
+        
+        // Remove quotes from chosen value if present
+        if ((chosen_value.front() == '"' && chosen_value.back() == '"') ||
+            (chosen_value.front() == '\'' && chosen_value.back() == '\'')) {
+            chosen_value = chosen_value.substr(1, chosen_value.length() - 2);
+        }
+        
+        return chosen_value;
+    }
+    
     // First, check if the expression is just a field name
     auto field_it = std::find(input_headers.begin(), input_headers.end(), expression);
     if (field_it != input_headers.end()) {
@@ -434,6 +475,34 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
 bool TransformationEngine::evaluate_rule_condition(const std::string& condition,
                                                   const std::vector<std::string>& row,
                                                   const std::vector<std::string>& headers) {
+    // Check for if-else (ternary) syntax: condition ? ACCEPT : REJECT
+    std::regex ternary_regex(R"((.+?)\s*\?\s*(ACCEPT|REJECT)\s*:\s*(ACCEPT|REJECT))");
+    std::smatch ternary_match;
+    
+    if (std::regex_match(condition, ternary_match, ternary_regex)) {
+        std::string condition_part = ternary_match[1].str();
+        std::string true_value = ternary_match[2].str();
+        std::string false_value = ternary_match[3].str();
+        
+        // Trim whitespace from condition part
+        condition_part.erase(0, condition_part.find_first_not_of(" \t"));
+        condition_part.erase(condition_part.find_last_not_of(" \t") + 1);
+        
+        // Evaluate the condition part
+        bool condition_result = evaluate_simple_condition(condition_part, row, headers);
+        
+        // Return true if the result is ACCEPT, false if REJECT
+        std::string result_value = condition_result ? true_value : false_value;
+        return result_value == "ACCEPT";
+    }
+    
+    // Fall back to simple condition evaluation for backward compatibility
+    return evaluate_simple_condition(condition, row, headers);
+}
+
+bool TransformationEngine::evaluate_simple_condition(const std::string& condition,
+                                                    const std::vector<std::string>& row,
+                                                    const std::vector<std::string>& headers) {
     // Simplified condition evaluation
     // Support: field = 'value', field != 'value', field > 'value', etc.
     
@@ -458,18 +527,47 @@ bool TransformationEngine::evaluate_rule_condition(const std::string& condition,
         
         std::string field_value = row[field_index];
         
-        if (operator_str == "=") {
-            return field_value == value;
-        } else if (operator_str == "!=") {
-            return field_value != value;
-        } else if (operator_str == ">") {
-            return field_value > value;
-        } else if (operator_str == "<") {
-            return field_value < value;
-        } else if (operator_str == ">=") {
-            return field_value >= value;
-        } else if (operator_str == "<=") {
-            return field_value <= value;
+        // Try numeric comparison first
+        bool is_numeric = true;
+        double field_num = 0.0, value_num = 0.0;
+        
+        try {
+            field_num = std::stod(field_value);
+            value_num = std::stod(value);
+        } catch (...) {
+            is_numeric = false;
+        }
+        
+        if (is_numeric) {
+            // Numeric comparison
+            if (operator_str == "=") {
+                return field_num == value_num;
+            } else if (operator_str == "!=") {
+                return field_num != value_num;
+            } else if (operator_str == ">") {
+                return field_num > value_num;
+            } else if (operator_str == "<") {
+                return field_num < value_num;
+            } else if (operator_str == ">=") {
+                return field_num >= value_num;
+            } else if (operator_str == "<=") {
+                return field_num <= value_num;
+            }
+        } else {
+            // String comparison
+            if (operator_str == "=") {
+                return field_value == value;
+            } else if (operator_str == "!=") {
+                return field_value != value;
+            } else if (operator_str == ">") {
+                return field_value > value;
+            } else if (operator_str == "<") {
+                return field_value < value;
+            } else if (operator_str == ">=") {
+                return field_value >= value;
+            } else if (operator_str == "<=") {
+                return field_value <= value;
+            }
         }
     }
     

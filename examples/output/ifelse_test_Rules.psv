@@ -1,0 +1,5 @@
+GLOBAL|salary >= '80000' ? ACCEPT : REJECT|Only high earners (80K+)
+FIELD|employee_name|UPPER(name)|Convert name to uppercase  
+FIELD|salary_category|salary >= '90000' ? 'Premium' : 'Standard'|Categorize salary levels
+FIELD|dept_status|department = 'Engineering' ? 'Tech' : 'Non-Tech'|Categorize departments
+FIELD|experience_level|hire_date >= '2023-01-01' ? 'New' : 'Experienced'|Experience based on hire date
