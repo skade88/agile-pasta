@@ -52,4 +52,9 @@ private:
     bool evaluate_rule_condition(const std::string& condition,
                                const std::vector<std::string>& row,
                                const std::vector<std::string>& headers);
+    
+    // Evaluate simple condition (helper for if-else logic)
+    bool evaluate_simple_condition(const std::string& condition,
+                                 const std::vector<std::string>& row,
+                                 const std::vector<std::string>& headers);
 };

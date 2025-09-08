@@ -239,3 +239,88 @@ TEST_F(TransformationEngineTest, TransformDataWithNumericOperations) {
         EXPECT_FALSE(row[1].empty()); // Should have some value for double_age
     }
 }
+
+// Test if-else functionality for field rules
+TEST_F(TransformationEngineTest, TransformDataWithFieldIfElse) {
+    createTestFile("headers.psv", "salary_category|dept_status");
+    createTestFile("rules.psv", 
+        "FIELD|salary_category|salary >= '75000' ? 'High' : 'Low'|Categorize salary\n"
+        "FIELD|dept_status|department = 'engineering' ? 'Tech' : 'Non-Tech'|Categorize department");
+    
+    transformation_engine->load_output_headers(test_dir / "headers.psv");
+    transformation_engine->load_rules(test_dir / "rules.psv");
+    
+    auto result = transformation_engine->transform_data();
+    
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->rows.size(), 3); // All 3 records should be included
+    
+    // Check if-else results
+    // John: salary=75000, dept=engineering -> "High", "Tech"
+    // Jane: salary=65000, dept=marketing -> "Low", "Non-Tech"  
+    // Bob: salary=85000, dept=engineering -> "High", "Tech"
+    
+    bool found_high_tech = false, found_low_nontech = false;
+    for (const auto& row : result->rows) {
+        if (row[0] == "High" && row[1] == "Tech") {
+            found_high_tech = true;
+        } else if (row[0] == "Low" && row[1] == "Non-Tech") {
+            found_low_nontech = true;
+        }
+    }
+    EXPECT_TRUE(found_high_tech);
+    EXPECT_TRUE(found_low_nontech);
+}
+
+// Test if-else functionality for global rules
+TEST_F(TransformationEngineTest, TransformDataWithGlobalIfElse) {
+    createTestFile("headers.psv", "employee_name|salary");
+    createTestFile("rules.psv", 
+        "GLOBAL|salary >= '75000' ? ACCEPT : REJECT|Filter high earners\n"
+        "FIELD|employee_name|first_name + \" \" + last_name|Combine names\n"
+        "FIELD|salary|salary|Copy salary");
+    
+    transformation_engine->load_output_headers(test_dir / "headers.psv");
+    transformation_engine->load_rules(test_dir / "rules.psv");
+    
+    auto result = transformation_engine->transform_data();
+    
+    ASSERT_NE(result, nullptr);
+    
+    // Should only return John Doe (75000) and Bob Johnson (85000)
+    // Jane Smith (65000) should be filtered out
+    ASSERT_EQ(result->rows.size(), 2);
+    
+    bool found_john = false, found_bob = false;
+    for (const auto& row : result->rows) {
+        if (row[0] == "John Doe") {
+            found_john = true;
+            EXPECT_EQ(row[1], "75000");
+        } else if (row[0] == "Bob Johnson") {
+            found_bob = true;
+            EXPECT_EQ(row[1], "85000");
+        }
+    }
+    EXPECT_TRUE(found_john);
+    EXPECT_TRUE(found_bob);
+}
+
+// Test numeric comparison in conditions
+TEST_F(TransformationEngineTest, TransformDataWithNumericComparison) {
+    createTestFile("headers.psv", "employee_name");
+    createTestFile("rules.psv", 
+        "GLOBAL|salary >= '80000'|Only salaries >= 80000\n"
+        "FIELD|employee_name|first_name + \" \" + last_name|Combine names");
+    
+    transformation_engine->load_output_headers(test_dir / "headers.psv");
+    transformation_engine->load_rules(test_dir / "rules.psv");
+    
+    auto result = transformation_engine->transform_data();
+    
+    ASSERT_NE(result, nullptr);
+    
+    // Should only return Bob Johnson (85000)
+    // John Doe (75000) and Jane Smith (65000) should be filtered out
+    ASSERT_EQ(result->rows.size(), 1);
+    EXPECT_EQ(result->rows[0][0], "Bob Johnson");
+}

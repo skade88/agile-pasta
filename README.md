@@ -148,6 +148,20 @@ GLOBAL|salary >= '75000'|Only employees with salary >= 75000
 GLOBAL|hire_date >= '2023-01-01'|Only recent hires
 ```
 
+#### If-Else Global Rules
+Use conditional logic to accept or reject records:
+
+```
+GLOBAL|<condition> ? ACCEPT : REJECT|<description>
+```
+
+Examples:
+```
+GLOBAL|salary >= '75000' ? ACCEPT : REJECT|Only high earners
+GLOBAL|department = 'Engineering' ? ACCEPT : REJECT|Only engineers
+GLOBAL|hire_date >= '2023-01-01' ? ACCEPT : REJECT|Only recent hires
+```
+
 ### Field Rules
 Transform specific output fields:
 
@@ -165,6 +179,21 @@ FIELD|title_name|TITLE(name)|Convert name to title case
 FIELD|greeting|"Hello, " + name + "!"|Add greeting with punctuation
 ```
 
+#### If-Else Field Rules
+Use conditional logic to choose field values:
+
+```
+FIELD|<output_field>|<condition> ? <value1> : <value2>|<description>
+```
+
+Examples:
+```
+FIELD|salary_tier|salary >= '80000' ? 'High' : 'Standard'|Categorize salary
+FIELD|dept_type|department = 'Engineering' ? 'Tech' : 'Business'|Department type
+FIELD|status|hire_date >= '2023-01-01' ? 'New' : 'Experienced'|Employee status
+FIELD|bonus_eligible|salary >= '75000' ? 'Yes' : 'No'|Bonus eligibility
+```
+
 ### Supported Operations
 
 #### Comparison Operators
@@ -174,6 +203,17 @@ FIELD|greeting|"Hello, " + name + "!"|Add greeting with punctuation
 - `<` (less than)
 - `>=` (greater than or equal)
 - `<=` (less than or equal)
+
+**Note:** Numeric values are automatically detected and compared numerically rather than lexicographically.
+
+#### If-Else Expressions
+- `condition ? value1 : value2` - Ternary operator syntax
+- **Global rules**: Use `ACCEPT` or `REJECT` as values
+- **Field rules**: Use any string values (quoted or field references)
+- Examples:
+  - `salary >= '75000' ? ACCEPT : REJECT` - Global filtering
+  - `salary >= '80000' ? 'High' : 'Standard'` - Field categorization
+  - `department = 'Engineering' ? 'Tech' : 'Business'` - Department mapping
 
 #### Functions
 - `UPPER(field)` - Convert to uppercase
