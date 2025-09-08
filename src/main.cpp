@@ -43,6 +43,106 @@ void load_data_multithreaded(const std::vector<FileInfo>& files, Database& datab
               << " total records from " << files.size() << " files." << std::endl;
 }
 
+void process_sanity_check(const std::string& output_path) {
+    try {
+        std::cout << "Running sanity checks on output directory: " << output_path << std::endl;
+        
+        // Step 1: Scan output files
+        auto output_files = FileScanner::scan_output_files(output_path);
+        
+        if (output_files.empty()) {
+            std::cout << "No output configuration files found in: " << output_path << std::endl;
+            return;
+        }
+        
+        FileScanner::display_output_structure(output_files);
+        
+        int total_files = output_files.size();
+        int passed_files = 0;
+        int failed_files = 0;
+        
+        std::cout << "\nRunning sanity checks..." << std::endl;
+        std::cout << "================================================================================\n";
+        
+        // Step 2: Validate each output file pair
+        for (const auto& output_file : output_files) {
+            std::cout << "\nChecking: " << output_file.name_prefix << std::endl;
+            bool file_passed = true;
+            
+            // Check 1: Verify both files exist
+            if (!std::filesystem::exists(output_file.headers_path)) {
+                std::cout << "  ❌ Headers file missing: " << output_file.headers_path << std::endl;
+                file_passed = false;
+            } else {
+                std::cout << "  ✅ Headers file exists: " << output_file.headers_path << std::endl;
+            }
+            
+            if (!std::filesystem::exists(output_file.rules_path)) {
+                std::cout << "  ❌ Rules file missing: " << output_file.rules_path << std::endl;
+                file_passed = false;
+            } else {
+                std::cout << "  ✅ Rules file exists: " << output_file.rules_path << std::endl;
+            }
+            
+            // Check 2: Validate headers file syntax using existing parser
+            if (std::filesystem::exists(output_file.headers_path)) {
+                try {
+                    auto headers = PsvParser::parse_headers(output_file.headers_path);
+                    if (headers.empty()) {
+                        std::cout << "  ❌ Headers file is empty or invalid: " << output_file.headers_path << std::endl;
+                        file_passed = false;
+                    } else {
+                        std::cout << "  ✅ Headers file syntax valid (" << headers.size() << " headers)" << std::endl;
+                    }
+                } catch (const std::exception& e) {
+                    std::cout << "  ❌ Headers file syntax error: " << e.what() << std::endl;
+                    file_passed = false;
+                }
+            }
+            
+            // Check 3: Validate rules file syntax using existing parser
+            if (std::filesystem::exists(output_file.rules_path)) {
+                try {
+                    // Create a dummy database and query engine for validation
+                    Database dummy_db;
+                    QueryEngine dummy_query(dummy_db);
+                    TransformationEngine temp_engine(dummy_db, dummy_query);
+                    
+                    temp_engine.load_rules(output_file.rules_path);
+                    std::cout << "  ✅ Rules file syntax valid" << std::endl;
+                } catch (const std::exception& e) {
+                    std::cout << "  ❌ Rules file syntax error: " << e.what() << std::endl;
+                    file_passed = false;
+                }
+            }
+            
+            if (file_passed) {
+                std::cout << "  ✅ Overall: PASSED" << std::endl;
+                passed_files++;
+            } else {
+                std::cout << "  ❌ Overall: FAILED" << std::endl;
+                failed_files++;
+            }
+        }
+        
+        // Summary
+        std::cout << "\n================================================================================\n";
+        std::cout << "Sanity check summary:" << std::endl;
+        std::cout << "  Total configurations: " << total_files << std::endl;
+        std::cout << "  Passed: " << passed_files << std::endl;
+        std::cout << "  Failed: " << failed_files << std::endl;
+        
+        if (failed_files == 0) {
+            std::cout << "  🎉 All sanity checks PASSED!" << std::endl;
+        } else {
+            std::cout << "  ⚠️  Some sanity checks FAILED. Please fix the issues above." << std::endl;
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error during sanity check: " << e.what() << std::endl;
+    }
+}
+
 void process_transformation(const std::string& input_path, const std::string& output_path) {
     try {
         // Step 1: Scan input files
@@ -125,6 +225,15 @@ int main(int argc, char* argv[]) {
                     return 1;
                 }
                 process_transformation(args.input_path, args.output_path);
+                return 0;
+                
+            case CommandLineArgs::Command::SANITY_CHECK:
+                if (args.sanity_check_path.empty()) {
+                    std::cerr << "Error: --out path is required for check command." << std::endl;
+                    CommandLineParser::print_usage();
+                    return 1;
+                }
+                process_sanity_check(args.sanity_check_path);
                 return 0;
                 
             case CommandLineArgs::Command::INVALID:

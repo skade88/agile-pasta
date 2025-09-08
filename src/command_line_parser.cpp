@@ -39,6 +39,25 @@ CommandLineArgs CommandLineParser::parse(int argc, char* argv[]) {
         return args;
     }
     
+    if (command == "check" || command == "sanity-check") {
+        args.command = CommandLineArgs::Command::SANITY_CHECK;
+        
+        // Parse --out parameter for sanity check
+        for (int i = 2; i < argc; ++i) {
+            std::string arg = argv[i];
+            
+            if (arg == "--out" && i + 1 < argc) {
+                args.sanity_check_path = argv[++i];
+            } else {
+                // Unknown parameter
+                args.command = CommandLineArgs::Command::INVALID;
+                return args;
+            }
+        }
+        
+        return args;
+    }
+    
     args.command = CommandLineArgs::Command::INVALID;
     return args;
 }
@@ -55,24 +74,33 @@ configurable transformation rules.
 SYNOPSIS
     agile-pasta help
     agile-pasta transform --in <input_path> --out <output_path>
+    agile-pasta check --out <output_path>
 
 COMMANDS
     help                    Show this help message and usage examples
     transform               Transform PSV data files to CSV format
+    check                   Run sanity checks on output configuration files
 
 OPTIONS
     --in <path>            Input directory path (searches recursively for PSV files)
     --out <path>           Output directory path (searches recursively for rule files)
+                          For 'check' command: path to validate configuration files
 
 DESCRIPTION
     The transform command processes PSV data files and applies transformation rules
-    to generate Excel-compatible CSV output files. The program supports:
+    to generate Excel-compatible CSV output files. 
+    
+    The check command validates output configuration files to ensure they exist
+    and have correct syntax before running transformations.
+    
+    The program supports:
     
     • Multi-threaded data loading for performance
     • SQL-like operations (SELECT, JOIN, UNION)
     • Global and field-specific transformation rules
     • Progress bars for all operations
     • Cross-platform compatibility (Windows/Linux)
+    • Configuration file validation
 
 INPUT FILES
     The --in directory should contain pairs of PSV files:
@@ -127,8 +155,20 @@ EXAMPLES
     # Transform data files
     agile-pasta transform --in /data/input --out /data/output
     
+    # Run sanity checks on output configuration
+    agile-pasta check --out /data/output
+    
     # Windows example
     agile-pasta transform --in C:\Data\Input --out C:\Data\Output
+
+SANITY CHECKS
+    The 'check' command validates output configuration files by:
+    
+    • Verifying that both _Headers.psv and _Rules.psv files exist for each output
+    • Validating header file syntax (non-empty, valid PSV format)
+    • Validating rule file syntax using the same parser as transform command
+    • Reporting detailed status for each configuration pair
+    • Providing summary of passed/failed configurations
 
 SUPPORTED OPERATIONS
     • SELECT: Query specific columns from tables
@@ -147,5 +187,6 @@ AUTHORS
 void CommandLineParser::print_usage() {
     std::cout << "Usage: agile-pasta help" << std::endl;
     std::cout << "       agile-pasta transform --in <input_path> --out <output_path>" << std::endl;
+    std::cout << "       agile-pasta check --out <output_path>" << std::endl;
     std::cout << "Try 'agile-pasta help' for more information." << std::endl;
 }
