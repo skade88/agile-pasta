@@ -126,6 +126,7 @@ GLOBAL|hire_date >= '2023-01-01'|Only employees hired in 2023 or later
 FIELD|employee_name|name|Copy employee name
 FIELD|annual_salary|salary * 12|Convert monthly to annual salary
 FIELD|department_name|UPPER(department)|Convert department to uppercase
+FIELD|full_name|first_name + " " + last_name|Combine first and last name
 ```
 
 ## Transformation Rules
@@ -153,10 +154,11 @@ FIELD|<output_field>|<expression>|<description>
 
 Examples:
 ```
-FIELD|full_name|first_name + ' ' + last_name|Combine names
-FIELD|annual_salary|salary * 12|Convert monthly to annual
+FIELD|full_name|first_name + " " + last_name|Combine names with space
+FIELD|annual_salary|salary * 12|Convert monthly to annual salary
 FIELD|upper_name|UPPER(name)|Convert name to uppercase
 FIELD|lower_dept|LOWER(department)|Convert department to lowercase
+FIELD|greeting|"Hello, " + name + "!"|Add greeting with punctuation
 ```
 
 ### Supported Operations
@@ -174,6 +176,14 @@ FIELD|lower_dept|LOWER(department)|Convert department to lowercase
 - `LOWER(field)` - Convert to lowercase
 - `field1 + field2` - String concatenation
 - `field * number` - Numeric multiplication
+
+#### String Literals
+- Use double quotes for string literals: `"literal text"`
+- Single quotes also supported for backward compatibility: `'text'`
+- Examples:
+  - `"Hello, " + name + "!"` - Add greeting with punctuation
+  - `first_name + " " + last_name` - Combine names with space
+  - `"ID: " + emp_id` - Add prefix to field
 
 ## Example Project Structure
 
