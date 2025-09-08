@@ -335,6 +335,30 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
             std::transform(value.begin(), value.end(), value.begin(), ::tolower);
             return value;
         }
+    } else if (result_expression.find("TITLE(") == 0) {
+        // TITLE function - convert to title case (first letter of each word uppercase, rest lowercase)
+        size_t start = result_expression.find('(') + 1;
+        size_t end = result_expression.find(')', start);
+        if (end != std::string::npos) {
+            std::string value = result_expression.substr(start, end - start);
+            
+            // Convert entire string to lowercase first
+            std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+            
+            // Make first character uppercase if it's alphabetic
+            if (!value.empty() && std::isalpha(value[0])) {
+                value[0] = std::toupper(value[0]);
+            }
+            
+            // Make the first character after each space uppercase
+            for (size_t i = 1; i < value.length(); ++i) {
+                if (value[i-1] == ' ' && std::isalpha(value[i])) {
+                    value[i] = std::toupper(value[i]);
+                }
+            }
+            
+            return value;
+        }
     }
     
     // If no special handling, return the expression result as-is
