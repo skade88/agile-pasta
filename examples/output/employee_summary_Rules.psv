@@ -1,4 +1,5 @@
-FIELD|employee_name|name|Copy employee name
-FIELD|annual_salary|salary|Copy monthly salary as annual
-FIELD|department_name|department|Copy department name
-FIELD|years_since_hire|1|Default to 1 year for new hires
+GLOBAL|salary >= '75000'|Only employees with salary >= 75000
+FIELD|employee_name|UPPER(name)|Convert name to uppercase
+FIELD|annual_salary|salary|Copy salary as annual (simplified)
+FIELD|department_name|LOWER(department)|Convert department to lowercase
+FIELD|years_since_hire|2|Default to 2 years for demo

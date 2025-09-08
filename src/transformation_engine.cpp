@@ -76,21 +76,47 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
         return result; // Empty result
     }
     
-    // Start with a union of all tables for global filtering
-    auto combined_data = query_engine_.union_tables(table_names);
-    if (!combined_data) {
-        return result; // Empty result
+    // For now, use only the first table that has all required input fields
+    // In a more sophisticated implementation, this could use JOIN operations
+    std::unique_ptr<QueryResult> source_data;
+    std::vector<std::string> source_headers;
+    
+    // Try to find a table that contains most of the fields we need
+    for (const auto& table_name : table_names) {
+        const PsvTable* table = database_.get_table(table_name);
+        if (!table) continue;
+        
+        // Count how many of our required fields are in this table
+        int field_matches = 0;
+        for (const auto& rule : rules_) {
+            if (rule.type == TransformationRule::RuleType::FIELD) {
+                if (std::find(table->headers.begin(), table->headers.end(), rule.condition) != table->headers.end()) {
+                    field_matches++;
+                }
+            }
+        }
+        
+        // Use this table if it has the most matches
+        if (field_matches > 0) {
+            source_data = query_engine_.select(table_name);
+            source_headers = table->headers;
+            break; // Use first matching table for now
+        }
+    }
+    
+    if (!source_data) {
+        return result; // No suitable source data
     }
     
     // Apply global rules (filtering)
     std::vector<std::vector<std::string>> filtered_rows;
     
-    for (const auto& row : combined_data->rows) {
+    for (const auto& row : source_data->rows) {
         bool passes_global_filters = true;
         
         for (const auto& rule : rules_) {
             if (rule.type == TransformationRule::RuleType::GLOBAL) {
-                if (!evaluate_rule_condition(rule.condition, row, combined_data->headers)) {
+                if (!evaluate_rule_condition(rule.condition, row, source_headers)) {
                     passes_global_filters = false;
                     break;
                 }
@@ -115,7 +141,7 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                 if (rule.type == TransformationRule::RuleType::FIELD && 
                     rule.target_field == output_header) {
                     
-                    output_value = apply_rule(rule, input_row, combined_data->headers);
+                    output_value = apply_rule(rule, input_row, source_headers);
                     found_rule = true;
                     break;
                 }
@@ -123,10 +149,9 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
             
             // If no rule found, try to map directly from input
             if (!found_rule) {
-                auto it = std::find(combined_data->headers.begin(), 
-                                  combined_data->headers.end(), output_header);
-                if (it != combined_data->headers.end()) {
-                    size_t index = std::distance(combined_data->headers.begin(), it);
+                auto it = std::find(source_headers.begin(), source_headers.end(), output_header);
+                if (it != source_headers.end()) {
+                    size_t index = std::distance(source_headers.begin(), it);
                     if (index < input_row.size()) {
                         output_value = input_row[index];
                     }
@@ -186,10 +211,19 @@ TransformationRule TransformationEngine::parse_rule(const std::string& rule_text
 std::string TransformationEngine::apply_rule(const TransformationRule& rule, 
                                            const std::vector<std::string>& input_row,
                                            const std::vector<std::string>& input_headers) {
-    // Simplified expression evaluation
-    // This could be extended with a proper expression parser
-    
     std::string expression = rule.condition;
+    
+    // First, check if the expression is just a field name
+    auto field_it = std::find(input_headers.begin(), input_headers.end(), expression);
+    if (field_it != input_headers.end()) {
+        size_t field_index = std::distance(input_headers.begin(), field_it);
+        if (field_index < input_row.size()) {
+            return input_row[field_index];
+        }
+    }
+    
+    // If not a simple field reference, process as an expression
+    std::string result_expression = expression;
     
     // Replace field references with actual values
     for (size_t i = 0; i < input_headers.size() && i < input_row.size(); ++i) {
@@ -198,14 +232,14 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
         
         // Replace all occurrences of the header name with the value
         size_t pos = 0;
-        while ((pos = expression.find(header, pos)) != std::string::npos) {
+        while ((pos = result_expression.find(header, pos)) != std::string::npos) {
             // Make sure it's a whole word
-            bool is_start_ok = (pos == 0 || !std::isalnum(expression[pos-1]));
-            bool is_end_ok = (pos + header.length() == expression.length() || 
-                             !std::isalnum(expression[pos + header.length()]));
+            bool is_start_ok = (pos == 0 || !std::isalnum(result_expression[pos-1]));
+            bool is_end_ok = (pos + header.length() == result_expression.length() || 
+                             !std::isalnum(result_expression[pos + header.length()]));
             
             if (is_start_ok && is_end_ok) {
-                expression.replace(pos, header.length(), value);
+                result_expression.replace(pos, header.length(), value);
                 pos += value.length();
             } else {
                 pos += header.length();
@@ -214,9 +248,9 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
     }
     
     // Handle simple expressions
-    if (expression.find(" + ") != std::string::npos) {
+    if (result_expression.find(" + ") != std::string::npos) {
         // String concatenation
-        std::stringstream ss(expression);
+        std::stringstream ss(result_expression);
         std::string part;
         std::string result;
         
@@ -228,9 +262,9 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
         }
         
         return result;
-    } else if (expression.find(" * ") != std::string::npos) {
+    } else if (result_expression.find(" * ") != std::string::npos) {
         // Numeric multiplication (simplified)
-        std::stringstream ss(expression);
+        std::stringstream ss(result_expression);
         std::string left, op, right;
         ss >> left >> op >> right;
         
@@ -239,30 +273,30 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
             double right_val = std::stod(right);
             return std::to_string(left_val * right_val);
         } catch (...) {
-            return expression; // Return as-is if can't evaluate
+            return result_expression; // Return as-is if can't evaluate
         }
-    } else if (expression.find("UPPER(") == 0) {
+    } else if (result_expression.find("UPPER(") == 0) {
         // UPPER function
-        size_t start = expression.find('(') + 1;
-        size_t end = expression.find(')', start);
+        size_t start = result_expression.find('(') + 1;
+        size_t end = result_expression.find(')', start);
         if (end != std::string::npos) {
-            std::string value = expression.substr(start, end - start);
+            std::string value = result_expression.substr(start, end - start);
             std::transform(value.begin(), value.end(), value.begin(), ::toupper);
             return value;
         }
-    } else if (expression.find("LOWER(") == 0) {
+    } else if (result_expression.find("LOWER(") == 0) {
         // LOWER function
-        size_t start = expression.find('(') + 1;
-        size_t end = expression.find(')', start);
+        size_t start = result_expression.find('(') + 1;
+        size_t end = result_expression.find(')', start);
         if (end != std::string::npos) {
-            std::string value = expression.substr(start, end - start);
+            std::string value = result_expression.substr(start, end - start);
             std::transform(value.begin(), value.end(), value.begin(), ::tolower);
             return value;
         }
     }
     
     // If no special handling, return the expression result as-is
-    return expression;
+    return result_expression;
 }
 
 bool TransformationEngine::evaluate_rule_condition(const std::string& condition,
