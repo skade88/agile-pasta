@@ -1,4 +1,5 @@
 #include "custom_progress_bar.h"
+#include "ansi_output.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -31,7 +32,9 @@ void CustomProgressBar::mark_as_completed() {
         current_progress_ = max_progress_;
         completed_ = true;
         display();
-        std::cout << std::endl; // Move to next line when completed
+        if (AnsiOutput::is_terminal_output()) {
+            std::cout << std::endl; // Move to next line when completed
+        }
     }
 }
 

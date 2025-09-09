@@ -1,4 +1,5 @@
 #include "file_scanner.h"
+#include "ansi_output.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -91,26 +92,26 @@ std::vector<OutputFileInfo> FileScanner::scan_output_files(const std::string& ro
 }
 
 void FileScanner::display_file_structure(const std::vector<FileInfo>& files) {
-    std::cout << "\nFound " << files.size() << " input file pairs:" << std::endl;
-    std::cout << std::string(80, '-') << std::endl;
+    AnsiOutput::success("\nFound " + std::to_string(files.size()) + " input file pairs:");
+    AnsiOutput::separator(80, '-');
     
     for (const auto& file : files) {
-        std::cout << "Data file:   " << file.path << " (" << format_file_size(file.size_bytes) << ")" << std::endl;
-        std::cout << "Header file: " << file.headers_path << std::endl;
-        std::cout << "Prefix:      " << file.name_prefix << std::endl;
-        std::cout << std::endl;
+        AnsiOutput::info("Data file:   " + file.path.string() + " (" + format_file_size(file.size_bytes) + ")");
+        AnsiOutput::plain("Header file: " + file.headers_path.string());
+        AnsiOutput::plain("Prefix:      " + file.name_prefix);
+        AnsiOutput::plain("");
     }
 }
 
 void FileScanner::display_output_structure(const std::vector<OutputFileInfo>& files) {
-    std::cout << "\nFound " << files.size() << " output configuration pairs:" << std::endl;
-    std::cout << std::string(80, '-') << std::endl;
+    AnsiOutput::success("\nFound " + std::to_string(files.size()) + " output configuration pairs:");
+    AnsiOutput::separator(80, '-');
     
     for (const auto& file : files) {
-        std::cout << "Headers file: " << file.headers_path << std::endl;
-        std::cout << "Rules file:   " << file.rules_path << std::endl;
-        std::cout << "Output name:  " << file.name_prefix << ".csv" << std::endl;
-        std::cout << std::endl;
+        AnsiOutput::info("Headers file: " + file.headers_path.string());
+        AnsiOutput::plain("Rules file:   " + file.rules_path.string());
+        AnsiOutput::plain("Output name:  " + file.name_prefix + ".csv");
+        AnsiOutput::plain("");
     }
 }
 

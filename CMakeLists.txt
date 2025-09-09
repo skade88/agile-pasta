@@ -40,6 +40,7 @@ set(HEADERS
     include/csv_writer.h
     include/progress_manager.h
     include/custom_progress_bar.h
+    include/ansi_output.h
 )
 
 # Create executable with just main.cpp
@@ -104,6 +105,7 @@ set(LIB_SOURCES
     src/csv_writer.cpp
     src/progress_manager.cpp
     src/custom_progress_bar.cpp
+    src/ansi_output.cpp
 )
 
 add_library(agile-pasta-lib STATIC ${LIB_SOURCES} ${HEADERS})
