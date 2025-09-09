@@ -184,7 +184,7 @@ SUPPORTED OPERATIONS
     • Field transformations using expressions
 
 AUTHORS
-    Built with indicators library for progress reporting
+    Built with custom ANSI/VT progress bars for enhanced reporting
     Cross-platform C++ implementation
 
 )" << std::endl;

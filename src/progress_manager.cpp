@@ -1,79 +1,67 @@
 #include "progress_manager.h"
-#include <indicators/progress_bar.hpp>
-#include <indicators/block_progress_bar.hpp>
-#include <indicators/cursor_control.hpp>
 
-std::unique_ptr<indicators::ProgressBar> ProgressManager::create_file_progress(
+std::unique_ptr<CustomProgressBar> ProgressManager::create_file_progress(
     const std::string& filename, size_t total_size) {
     
-    auto progress = std::make_unique<indicators::ProgressBar>(
-        indicators::option::BarWidth{50},
-        indicators::option::Start{"["},
-        indicators::option::Fill{"█"},
-        indicators::option::Lead{"█"},
-        indicators::option::Remainder{"-"},
-        indicators::option::End{"]"},
-        indicators::option::PrefixText{"Loading " + filename + " "},
-        indicators::option::ForegroundColor{indicators::Color::green},
-        indicators::option::ShowElapsedTime{true},
-        indicators::option::ShowRemainingTime{true},
-        indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}
-    );
+    CustomProgressBar::Config config;
+    config.bar_width = 50;
+    config.start = "[";
+    config.fill = "█";
+    config.lead = "█";
+    config.remainder = "-";
+    config.end = "]";
+    config.prefix_text = "Loading " + filename + " ";
+    config.foreground_color = CustomProgressBar::Color::green;
+    config.show_elapsed_time = true;
+    config.show_remaining_time = true;
+    config.bold = true;
     
-    progress->set_option(indicators::option::MaxProgress{total_size});
+    auto progress = std::make_unique<CustomProgressBar>(config);
+    progress->set_max_progress(total_size);
     return progress;
 }
 
-std::unique_ptr<indicators::ProgressBar> ProgressManager::create_processing_progress(
+std::unique_ptr<CustomProgressBar> ProgressManager::create_processing_progress(
     const std::string& task_name, size_t total_items) {
     
-    auto progress = std::make_unique<indicators::ProgressBar>(
-        indicators::option::BarWidth{50},
-        indicators::option::Start{"["},
-        indicators::option::Fill{"█"},
-        indicators::option::Lead{"█"},
-        indicators::option::Remainder{"-"},
-        indicators::option::End{"]"},
-        indicators::option::PrefixText{task_name + " "},
-        indicators::option::ForegroundColor{indicators::Color::blue},
-        indicators::option::ShowElapsedTime{true},
-        indicators::option::ShowRemainingTime{true},
-        indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}
-    );
+    CustomProgressBar::Config config;
+    config.bar_width = 50;
+    config.start = "[";
+    config.fill = "█";
+    config.lead = "█";
+    config.remainder = "-";
+    config.end = "]";
+    config.prefix_text = task_name + " ";
+    config.foreground_color = CustomProgressBar::Color::blue;
+    config.show_elapsed_time = true;
+    config.show_remaining_time = true;
+    config.bold = true;
     
-    progress->set_option(indicators::option::MaxProgress{total_items});
+    auto progress = std::make_unique<CustomProgressBar>(config);
+    progress->set_max_progress(total_items);
     return progress;
 }
 
-std::unique_ptr<indicators::BlockProgressBar> ProgressManager::create_overall_progress(
+std::unique_ptr<CustomBlockProgressBar> ProgressManager::create_overall_progress(
     const std::string& task_name) {
     
-    auto progress = std::make_unique<indicators::BlockProgressBar>(
-        indicators::option::BarWidth{50},
-        indicators::option::ForegroundColor{indicators::Color::cyan},
-        indicators::option::PrefixText{task_name + " "},
-        indicators::option::ShowElapsedTime{true}
-    );
+    CustomProgressBar::Config config;
+    config.bar_width = 50;
+    config.prefix_text = task_name + " ";
+    config.foreground_color = CustomProgressBar::Color::cyan;
+    config.show_elapsed_time = true;
+    config.show_remaining_time = false; // Block style typically doesn't show remaining time
+    config.bold = false;
     
-    return progress;
+    return std::make_unique<CustomBlockProgressBar>(config);
 }
 
-void ProgressManager::update_progress(indicators::ProgressBar& bar, size_t current) {
-#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
-    // On Windows, explicitly erase the line before updating to prevent 
-    // progress bars from creating new lines instead of updating in place.
-    // On Linux, the indicators library handles in-place updates natively,
-    // so erase_line() is not needed and actually interferes with proper display.
-    indicators::erase_line();
-#endif
+void ProgressManager::update_progress(CustomProgressBar& bar, size_t current) {
+    // No platform-specific line erasing needed - the custom progress bar handles this internally
     bar.set_progress(current);
 }
 
-void ProgressManager::complete_progress(indicators::ProgressBar& bar) {
-#if defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64)
-    // On Windows, explicitly erase the line before completing to ensure clean output.
-    // On Linux, the indicators library handles completion properly without manual erasing.
-    indicators::erase_line();
-#endif
+void ProgressManager::complete_progress(CustomProgressBar& bar) {
+    // No platform-specific line erasing needed - the custom progress bar handles this internally
     bar.mark_as_completed();
 }

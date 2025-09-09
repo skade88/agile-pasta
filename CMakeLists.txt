@@ -11,7 +11,6 @@ find_package(Threads REQUIRED)
 
 # Include directories
 include_directories(include)
-include_directories(external/indicators/include)
 
 # Platform-specific settings
 if(WIN32)
@@ -40,6 +39,7 @@ set(HEADERS
     include/transformation_engine.h
     include/csv_writer.h
     include/progress_manager.h
+    include/custom_progress_bar.h
 )
 
 # Create executable with just main.cpp
@@ -103,6 +103,7 @@ set(LIB_SOURCES
     src/transformation_engine.cpp
     src/csv_writer.cpp
     src/progress_manager.cpp
+    src/custom_progress_bar.cpp
 )
 
 add_library(agile-pasta-lib STATIC ${LIB_SOURCES} ${HEADERS})
