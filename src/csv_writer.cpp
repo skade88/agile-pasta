@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <functional>
 
 bool CsvWriter::write_csv(const QueryResult& result, const std::filesystem::path& output_path) {
     std::ofstream file(output_path);
@@ -66,6 +67,42 @@ bool CsvWriter::write_csv_with_progress(const QueryResult& result,
     }
     
     ProgressManager::complete_progress(*progress);
+    return file.good();
+}
+
+bool CsvWriter::write_csv_with_callback(const QueryResult& result, 
+                                       const std::filesystem::path& output_path,
+                                       std::function<void(size_t)> progress_callback) {
+    std::ofstream file(output_path);
+    if (!file.is_open()) {
+        return false;
+    }
+    
+    // Write headers
+    for (size_t i = 0; i < result.headers.size(); ++i) {
+        if (i > 0) file << ",";
+        file << escape_csv_field(result.headers[i]);
+    }
+    file << "\n";
+    
+    if (progress_callback) progress_callback(1);
+    
+    // Write data rows
+    for (size_t row_idx = 0; row_idx < result.rows.size(); ++row_idx) {
+        const auto& row = result.rows[row_idx];
+        
+        for (size_t i = 0; i < row.size(); ++i) {
+            if (i > 0) file << ",";
+            file << escape_csv_field(row[i]);
+        }
+        file << "\n";
+        
+        // Update progress periodically
+        if (progress_callback && (row_idx % 100 == 0 || row_idx == result.rows.size() - 1)) {
+            progress_callback(row_idx + 2);
+        }
+    }
+    
     return file.good();
 }
 

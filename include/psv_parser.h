@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <memory>
 #include <map>
+#include <functional>
 
 struct PsvRecord {
     std::vector<std::string> fields;
@@ -29,12 +30,22 @@ public:
     static std::unique_ptr<PsvTable> parse_file(const std::filesystem::path& data_path, 
                                                const std::filesystem::path& headers_path);
     
+    // Parse a PSV file with progress callback
+    static std::unique_ptr<PsvTable> parse_file(const std::filesystem::path& data_path, 
+                                               const std::filesystem::path& headers_path,
+                                               std::function<void(size_t)> progress_callback);
+    
     // Parse headers file
     static std::vector<std::string> parse_headers(const std::filesystem::path& headers_path);
     
     // Parse data file with progress reporting
     static std::vector<PsvRecord> parse_data(const std::filesystem::path& data_path, 
                                             size_t& total_records);
+                                            
+    // Parse data file with callback for progress reporting
+    static std::vector<PsvRecord> parse_data_with_callback(const std::filesystem::path& data_path, 
+                                                          size_t& total_records,
+                                                          std::function<void(size_t)> progress_callback);
 
 private:
     static std::vector<std::string> split_psv_line(const std::string& line);
