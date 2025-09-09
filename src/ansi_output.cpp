@@ -32,11 +32,11 @@ void AnsiOutput::separator(int length, char character) {
         // Use ANSI/VT line drawing characters for terminal output
         std::string line_char;
         if (character == '=') {
-            line_char = "═"; // U+2550 BOX DRAWINGS DOUBLE HORIZONTAL
+            line_char = "\xE2\x95\x90"; // U+2550 BOX DRAWINGS DOUBLE HORIZONTAL (UTF-8)
         } else if (character == '-') {
-            line_char = "─"; // U+2500 BOX DRAWINGS LIGHT HORIZONTAL  
+            line_char = "\xE2\x94\x80"; // U+2500 BOX DRAWINGS LIGHT HORIZONTAL (UTF-8)
         } else {
-            line_char = "─"; // Default to light horizontal line
+            line_char = "\xE2\x94\x80"; // Default to light horizontal line
         }
         
         std::string separator_line;
