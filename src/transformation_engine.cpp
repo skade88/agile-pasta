@@ -528,6 +528,22 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
             
             return value;
         }
+    } else if (result_expression.find("TRIM(") == 0) {
+        // TRIM function - remove leading and trailing whitespace
+        size_t start = result_expression.find('(') + 1;
+        size_t end = result_expression.find(')', start);
+        if (end != std::string::npos) {
+            std::string value = result_expression.substr(start, end - start);
+            
+            // Trim leading and trailing whitespace
+            size_t trim_start = value.find_first_not_of(" \t\r\n");
+            if (trim_start == std::string::npos) {
+                return "";
+            }
+            
+            size_t trim_end = value.find_last_not_of(" \t\r\n");
+            return value.substr(trim_start, trim_end - trim_start + 1);
+        }
     }
     
     // If no special handling, return the expression result as-is
