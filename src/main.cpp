@@ -6,6 +6,7 @@
 #include "transformation_engine.h"
 #include "csv_writer.h"
 #include "progress_manager.h"
+#include "ansi_output.h"
 
 #include <iostream>
 #include <thread>
@@ -13,7 +14,7 @@
 #include <chrono>
 
 void load_data_multithreaded(const std::vector<FileInfo>& files, Database& database) {
-    std::cout << "\nLoading data files..." << std::endl;
+    AnsiOutput::info("\nLoading data files...");
     
     std::vector<std::future<std::unique_ptr<PsvTable>>> futures;
     
@@ -39,19 +40,19 @@ void load_data_multithreaded(const std::vector<FileInfo>& files, Database& datab
         }
     }
     
-    std::cout << "Loaded " << database.get_total_records() 
-              << " total records from " << files.size() << " files." << std::endl;
+    AnsiOutput::success("Loaded " + std::to_string(database.get_total_records()) + 
+                     " total records from " + std::to_string(files.size()) + " files.");
 }
 
 void process_sanity_check(const std::string& output_path) {
     try {
-        std::cout << "Running sanity checks on output directory: " << output_path << std::endl;
+        AnsiOutput::info("Running sanity checks on output directory: " + output_path);
         
         // Step 1: Scan output files
         auto output_files = FileScanner::scan_output_files(output_path);
         
         if (output_files.empty()) {
-            std::cout << "No output configuration files found in: " << output_path << std::endl;
+            AnsiOutput::warning("No output configuration files found in: " + output_path);
             return;
         }
         
@@ -61,27 +62,29 @@ void process_sanity_check(const std::string& output_path) {
         int passed_files = 0;
         int failed_files = 0;
         
-        std::cout << "\nRunning sanity checks..." << std::endl;
-        std::cout << "================================================================================\n";
+        AnsiOutput::plain("");
+        AnsiOutput::info("Running sanity checks...");
+        AnsiOutput::separator();
         
         // Step 2: Validate each output file pair
         for (const auto& output_file : output_files) {
-            std::cout << "\nChecking: " << output_file.name_prefix << std::endl;
+            AnsiOutput::plain("");
+            AnsiOutput::header("Checking: " + output_file.name_prefix);
             bool file_passed = true;
             
             // Check 1: Verify both files exist
             if (!std::filesystem::exists(output_file.headers_path)) {
-                std::cout << "  ❌ Headers file missing: " << output_file.headers_path << std::endl;
+                AnsiOutput::error("  ❌ Headers file missing: " + output_file.headers_path.string());
                 file_passed = false;
             } else {
-                std::cout << "  ✅ Headers file exists: " << output_file.headers_path << std::endl;
+                AnsiOutput::success("  ✅ Headers file exists: " + output_file.headers_path.string());
             }
             
             if (!std::filesystem::exists(output_file.rules_path)) {
-                std::cout << "  ❌ Rules file missing: " << output_file.rules_path << std::endl;
+                AnsiOutput::error("  ❌ Rules file missing: " + output_file.rules_path.string());
                 file_passed = false;
             } else {
-                std::cout << "  ✅ Rules file exists: " << output_file.rules_path << std::endl;
+                AnsiOutput::success("  ✅ Rules file exists: " + output_file.rules_path.string());
             }
             
             // Check 2: Validate headers file syntax using existing parser
@@ -89,13 +92,13 @@ void process_sanity_check(const std::string& output_path) {
                 try {
                     auto headers = PsvParser::parse_headers(output_file.headers_path);
                     if (headers.empty()) {
-                        std::cout << "  ❌ Headers file is empty or invalid: " << output_file.headers_path << std::endl;
+                        AnsiOutput::error("  ❌ Headers file is empty or invalid: " + output_file.headers_path.string());
                         file_passed = false;
                     } else {
-                        std::cout << "  ✅ Headers file syntax valid (" << headers.size() << " headers)" << std::endl;
+                        AnsiOutput::success("  ✅ Headers file syntax valid (" + std::to_string(headers.size()) + " headers)");
                     }
                 } catch (const std::exception& e) {
-                    std::cout << "  ❌ Headers file syntax error: " << e.what() << std::endl;
+                    AnsiOutput::error("  ❌ Headers file syntax error: " + std::string(e.what()));
                     file_passed = false;
                 }
             }
@@ -109,33 +112,34 @@ void process_sanity_check(const std::string& output_path) {
                     TransformationEngine temp_engine(dummy_db, dummy_query);
                     
                     temp_engine.load_rules(output_file.rules_path);
-                    std::cout << "  ✅ Rules file syntax valid" << std::endl;
+                    AnsiOutput::success("  ✅ Rules file syntax valid");
                 } catch (const std::exception& e) {
-                    std::cout << "  ❌ Rules file syntax error: " << e.what() << std::endl;
+                    AnsiOutput::error("  ❌ Rules file syntax error: " + std::string(e.what()));
                     file_passed = false;
                 }
             }
             
             if (file_passed) {
-                std::cout << "  ✅ Overall: PASSED" << std::endl;
+                AnsiOutput::success("  ✅ Overall: PASSED");
                 passed_files++;
             } else {
-                std::cout << "  ❌ Overall: FAILED" << std::endl;
+                AnsiOutput::error("  ❌ Overall: FAILED");
                 failed_files++;
             }
         }
         
         // Summary
-        std::cout << "\n================================================================================\n";
-        std::cout << "Sanity check summary:" << std::endl;
-        std::cout << "  Total configurations: " << total_files << std::endl;
-        std::cout << "  Passed: " << passed_files << std::endl;
-        std::cout << "  Failed: " << failed_files << std::endl;
+        AnsiOutput::plain("");
+        AnsiOutput::separator();
+        AnsiOutput::header("Sanity check summary:");
+        AnsiOutput::plain("  Total configurations: " + std::to_string(total_files));
+        AnsiOutput::plain("  Passed: " + std::to_string(passed_files));
+        AnsiOutput::plain("  Failed: " + std::to_string(failed_files));
         
         if (failed_files == 0) {
-            std::cout << "  🎉 All sanity checks PASSED!" << std::endl;
+            AnsiOutput::success("  🎉 All sanity checks PASSED!");
         } else {
-            std::cout << "  ⚠️  Some sanity checks FAILED. Please fix the issues above." << std::endl;
+            AnsiOutput::warning("  ⚠️  Some sanity checks FAILED. Please fix the issues above.");
         }
         
     } catch (const std::exception& e) {
@@ -146,7 +150,7 @@ void process_sanity_check(const std::string& output_path) {
 void process_transformation(const std::string& input_path, const std::string& output_path) {
     try {
         // Step 1: Scan input files
-        std::cout << "Scanning input directory: " << input_path << std::endl;
+        AnsiOutput::info("Scanning input directory: " + input_path);
         auto input_files = FileScanner::scan_input_files(input_path);
         
         if (input_files.empty()) {
@@ -161,7 +165,7 @@ void process_transformation(const std::string& input_path, const std::string& ou
         load_data_multithreaded(input_files, database);
         
         // Step 3: Scan output files for transformation rules
-        std::cout << "\nScanning output directory: " << output_path << std::endl;
+        AnsiOutput::info("\nScanning output directory: " + output_path);
         auto output_files = FileScanner::scan_output_files(output_path);
         
         if (output_files.empty()) {
@@ -175,7 +179,7 @@ void process_transformation(const std::string& input_path, const std::string& ou
         QueryEngine query_engine(database);
         
         for (const auto& output_file : output_files) {
-            std::cout << "\nProcessing transformation: " << output_file.name_prefix << std::endl;
+            AnsiOutput::header("\nProcessing transformation: " + output_file.name_prefix);
             
             TransformationEngine transform_engine(database, query_engine);
             
@@ -191,18 +195,18 @@ void process_transformation(const std::string& input_path, const std::string& ou
                 auto output_csv_path = output_file.headers_path.parent_path() / 
                                      (output_file.name_prefix + ".csv");
                 
-                std::cout << "Writing output: " << output_csv_path << std::endl;
+                AnsiOutput::info("Writing output: " + output_csv_path.string());
                 
                 if (CsvWriter::write_csv_with_progress(*transformed_data, output_csv_path)) {
-                    std::cout << "Successfully wrote " << transformed_data->rows.size() 
-                              << " records to " << output_csv_path << std::endl;
+                    AnsiOutput::success("Successfully wrote " + std::to_string(transformed_data->rows.size()) + 
+                                       " records to " + output_csv_path.string());
                 } else {
                     std::cerr << "Failed to write output file: " << output_csv_path << std::endl;
                 }
             }
         }
         
-        std::cout << "\nTransformation complete!" << std::endl;
+        AnsiOutput::success("\nTransformation complete!");
         
     } catch (const std::exception& e) {
         std::cerr << "Error during transformation: " << e.what() << std::endl;
