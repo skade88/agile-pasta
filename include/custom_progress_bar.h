@@ -44,15 +44,6 @@ public:
     
     // Mark the progress bar as completed
     virtual void mark_as_completed();
-    
-    // Access to the shared display mutex for external coordination
-    static std::mutex& get_display_mutex() { return display_mutex_; }
-    
-    // Render the progress bar for external display coordination
-    virtual std::string render() const;
-    
-    // Display the progress bar (with platform-specific handling)
-    void display() const;
 
 protected:
     Config config_;
@@ -66,6 +57,12 @@ protected:
     std::string get_reset_code() const;
     std::string get_bold_code() const;
     std::string format_time(std::chrono::seconds seconds) const;
+    
+    // Render the progress bar
+    virtual std::string render() const;
+    
+    // Display the progress bar (with platform-specific handling)
+    void display() const;
     
     // Clear the current line
     void clear_line() const;

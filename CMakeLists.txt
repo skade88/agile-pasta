@@ -41,7 +41,6 @@ set(HEADERS
     include/progress_manager.h
     include/custom_progress_bar.h
     include/ansi_output.h
-    include/ui_coordinator.h
 )
 
 # Create executable with just main.cpp
@@ -107,7 +106,6 @@ set(LIB_SOURCES
     src/progress_manager.cpp
     src/custom_progress_bar.cpp
     src/ansi_output.cpp
-    src/ui_coordinator.cpp
 )
 
 add_library(agile-pasta-lib STATIC ${LIB_SOURCES} ${HEADERS})
