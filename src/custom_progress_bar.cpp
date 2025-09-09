@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <cmath>
 #include <mutex>
+#include <algorithm>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -21,7 +22,7 @@ CustomProgressBar::CustomProgressBar(const Config& config)
 }
 
 void CustomProgressBar::set_max_progress(size_t max_progress) {
-    max_progress_ = std::max(size_t(1), max_progress); // Avoid division by zero
+    max_progress_ = std::max(static_cast<size_t>(1), max_progress); // Avoid division by zero
 }
 
 void CustomProgressBar::set_progress(size_t current) {
