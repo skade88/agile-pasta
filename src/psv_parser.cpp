@@ -51,28 +51,6 @@ std::unique_ptr<PsvTable> PsvParser::parse_file(const std::filesystem::path& dat
     return table;
 }
 
-std::unique_ptr<PsvTable> PsvParser::parse_file(const std::filesystem::path& data_path, 
-                                               const std::filesystem::path& headers_path,
-                                               std::function<void(size_t)> progress_callback) {
-    auto table = std::make_unique<PsvTable>();
-    
-    // Parse headers first
-    table->headers = parse_headers(headers_path);
-    
-    // Parse data with callback
-    size_t total_records = 0;
-    table->records = parse_data_with_callback(data_path, total_records, progress_callback);
-    
-    // Set metadata
-    table->source_file = data_path;
-    table->name = data_path.stem().string();
-    
-    // Build index for fast lookups
-    table->build_header_index();
-    
-    return table;
-}
-
 std::vector<std::string> PsvParser::parse_headers(const std::filesystem::path& headers_path) {
     std::ifstream file(headers_path);
     if (!file.is_open()) {
@@ -125,42 +103,6 @@ std::vector<PsvRecord> PsvParser::parse_data(const std::filesystem::path& data_p
     }
     
     ProgressManager::complete_progress(*progress);
-    return records;
-}
-
-std::vector<PsvRecord> PsvParser::parse_data_with_callback(const std::filesystem::path& data_path, 
-                                                          size_t& total_records,
-                                                          std::function<void(size_t)> progress_callback) {
-    std::ifstream file(data_path);
-    if (!file.is_open()) {
-        throw std::runtime_error("Cannot open data file: " + data_path.string());
-    }
-    
-    // Position at end and beginning for progress reporting
-    file.seekg(0, std::ios::end);
-    file.seekg(0, std::ios::beg);
-    
-    std::vector<PsvRecord> records;
-    std::string line;
-    size_t current_pos = 0;
-    total_records = 0;
-    
-    while (std::getline(file, line)) {
-        line = trim(line);
-        if (!line.empty()) {
-            PsvRecord record;
-            record.fields = split_psv_line(line);
-            records.push_back(record);
-            total_records++;
-        }
-        
-        // Update progress via callback
-        current_pos = file.tellg();
-        if (current_pos != std::string::npos && progress_callback) {
-            progress_callback(current_pos);
-        }
-    }
-    
     return records;
 }
 

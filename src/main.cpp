@@ -7,24 +7,25 @@
 #include "csv_writer.h"
 #include "progress_manager.h"
 #include "ansi_output.h"
-#include "ui_coordinator.h"
 
 #include <iostream>
 #include <thread>
 #include <future>
 #include <chrono>
 
-void load_data_multithreaded(const std::vector<FileInfo>& files, Database& database, UICoordinator& ui_coordinator) {
+void load_data_multithreaded(const std::vector<FileInfo>& files, Database& database) {
+    AnsiOutput::info("\nLoading data files...");
+    
     std::vector<std::future<std::unique_ptr<PsvTable>>> futures;
     
     for (const auto& file : files) {
-        auto future = std::async(std::launch::async, [&file, &ui_coordinator]() {
-            auto table = PsvParser::parse_file(file.path, file.headers_path, 
-                [&ui_coordinator, filename = file.path.filename().string()](size_t current) {
-                    ui_coordinator.update_file_progress(filename, current);
-                });
+        auto future = std::async(std::launch::async, [&file]() {
+            auto progress = ProgressManager::create_file_progress(
+                file.path.filename().string(), file.size_bytes);
             
-            ui_coordinator.complete_file_progress(file.path.filename().string());
+            auto table = PsvParser::parse_file(file.path, file.headers_path);
+            
+            ProgressManager::complete_progress(*progress);
             return table;
         });
         
@@ -38,6 +39,9 @@ void load_data_multithreaded(const std::vector<FileInfo>& files, Database& datab
             database.load_table(std::move(table));
         }
     }
+    
+    AnsiOutput::success("Loaded " + std::to_string(database.get_total_records()) + 
+                     " total records from " + std::to_string(files.size()) + " files.");
 }
 
 void process_sanity_check(const std::string& output_path) {
@@ -156,7 +160,11 @@ void process_transformation(const std::string& input_path, const std::string& ou
         
         FileScanner::display_file_structure(input_files);
         
-        // Step 2: Scan output files for transformation rules
+        // Step 2: Load data into database
+        Database database;
+        load_data_multithreaded(input_files, database);
+        
+        // Step 3: Scan output files for transformation rules
         AnsiOutput::info("\nScanning output directory: " + output_path);
         auto output_files = FileScanner::scan_output_files(output_path);
         
@@ -167,18 +175,12 @@ void process_transformation(const std::string& input_path, const std::string& ou
         
         FileScanner::display_output_structure(output_files);
         
-        // Step 3: Create UICoordinator with all file information
-        UICoordinator ui_coordinator(input_files, output_files);
-        ui_coordinator.initialize_ui();
-        
-        // Step 4: Load data into database using coordinated UI
-        Database database;
-        load_data_multithreaded(input_files, database, ui_coordinator);
-        
-        // Step 5: Process transformations for each output file
+        // Step 4: Process transformations for each output file
         QueryEngine query_engine(database);
         
         for (const auto& output_file : output_files) {
+            AnsiOutput::header("\nProcessing transformation: " + output_file.name_prefix);
+            
             TransformationEngine transform_engine(database, query_engine);
             
             // Load transformation rules and headers
@@ -189,28 +191,21 @@ void process_transformation(const std::string& input_path, const std::string& ou
             auto transformed_data = transform_engine.transform_data();
             
             if (transformed_data) {
-                // Set progress maximum based on actual data
-                ui_coordinator.set_output_max_progress(output_file.name_prefix, transformed_data->rows.size());
-                
-                // Write CSV output with coordinated progress
+                // Write CSV output
                 auto output_csv_path = output_file.headers_path.parent_path() / 
                                      (output_file.name_prefix + ".csv");
                 
-                bool success = CsvWriter::write_csv_with_callback(*transformed_data, output_csv_path, 
-                    [&ui_coordinator, &output_file](size_t current) {
-                        ui_coordinator.update_output_progress(output_file.name_prefix, current);
-                    });
+                AnsiOutput::info("Writing output: " + output_csv_path.string());
                 
-                if (success) {
-                    ui_coordinator.complete_output_progress(output_file.name_prefix, transformed_data->rows.size());
+                if (CsvWriter::write_csv_with_progress(*transformed_data, output_csv_path)) {
+                    AnsiOutput::success("Successfully wrote " + std::to_string(transformed_data->rows.size()) + 
+                                       " records to " + output_csv_path.string());
                 } else {
                     std::cerr << "Failed to write output file: " << output_csv_path << std::endl;
                 }
             }
         }
         
-        // Step 6: Display summary
-        ui_coordinator.display_summary(database.get_total_records());
         AnsiOutput::success("\nTransformation complete!");
         
     } catch (const std::exception& e) {
