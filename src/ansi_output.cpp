@@ -28,8 +28,27 @@ void AnsiOutput::header(const std::string& message) {
 }
 
 void AnsiOutput::separator(int length, char character) {
-    std::string separator_line(length, character);
-    output_with_formatting(separator_line, Color::white);
+    if (is_terminal_output()) {
+        // Use ANSI/VT line drawing characters for terminal output
+        std::string line_char;
+        if (character == '=') {
+            line_char = "\xE2\x95\x90"; // U+2550 BOX DRAWINGS DOUBLE HORIZONTAL (UTF-8)
+        } else if (character == '-') {
+            line_char = "\xE2\x94\x80"; // U+2500 BOX DRAWINGS LIGHT HORIZONTAL (UTF-8)
+        } else {
+            line_char = "\xE2\x94\x80"; // Default to light horizontal line
+        }
+        
+        std::string separator_line;
+        for (int i = 0; i < length; i++) {
+            separator_line += line_char;
+        }
+        output_with_formatting(separator_line, Color::white);
+    } else {
+        // Use ASCII characters for non-terminal output (files, pipes)
+        std::string separator_line(length, character);
+        output_with_formatting(separator_line, Color::white);
+    }
 }
 
 void AnsiOutput::plain(const std::string& message) {
