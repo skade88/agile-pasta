@@ -12,6 +12,9 @@
 #include <thread>
 #include <future>
 #include <chrono>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 
 void load_data_multithreaded(const std::vector<FileInfo>& files, Database& database) {
     AnsiOutput::info("\nLoading data files...");
@@ -103,7 +106,7 @@ void process_sanity_check(const std::string& output_path) {
                 }
             }
             
-            // Check 3: Validate rules file syntax using existing parser
+            // Check 3: Validate rules file syntax and comprehensive header-rule mapping
             if (std::filesystem::exists(output_file.rules_path)) {
                 try {
                     // Create a dummy database and query engine for validation
@@ -111,8 +114,101 @@ void process_sanity_check(const std::string& output_path) {
                     QueryEngine dummy_query(dummy_db);
                     TransformationEngine temp_engine(dummy_db, dummy_query);
                     
+                    // Load headers and rules for comprehensive validation
+                    temp_engine.load_output_headers(output_file.headers_path);
                     temp_engine.load_rules(output_file.rules_path);
+                    
                     AnsiOutput::success("  ✅ Rules file syntax valid");
+                    
+                    // Get the parsed headers and rules for validation
+                    const auto& output_headers = temp_engine.get_output_headers();
+                    
+                    // We need to access the rules - let's add a public method to get them
+                    // For now, we'll parse them again manually to avoid changing the TransformationEngine interface
+                    std::vector<std::string> field_rule_targets;
+                    std::ifstream rules_file(output_file.rules_path);
+                    std::string rule_line;
+                    int total_rules = 0;
+                    int global_rules = 0;
+                    int field_rules = 0;
+                    
+                    while (std::getline(rules_file, rule_line)) {
+                        rule_line = rule_line.substr(0, rule_line.find('#')); // Remove comments
+                        if (rule_line.empty()) continue;
+                        
+                        // Remove leading/trailing whitespace
+                        rule_line.erase(0, rule_line.find_first_not_of(" \t"));
+                        rule_line.erase(rule_line.find_last_not_of(" \t") + 1);
+                        
+                        if (!rule_line.empty()) {
+                            total_rules++;
+                            
+                            // Parse rule type and target field
+                            std::vector<std::string> parts;
+                            std::stringstream ss(rule_line);
+                            std::string part;
+                            
+                            while (std::getline(ss, part, '|')) {
+                                part.erase(0, part.find_first_not_of(" \t"));
+                                part.erase(part.find_last_not_of(" \t") + 1);
+                                parts.push_back(part);
+                            }
+                            
+                            if (parts.size() >= 3) {
+                                if (parts[0] == "GLOBAL") {
+                                    global_rules++;
+                                } else if (parts[0] == "FIELD") {
+                                    field_rules++;
+                                    if (parts.size() >= 2) {
+                                        field_rule_targets.push_back(parts[1]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    AnsiOutput::success("  ✅ Found " + std::to_string(total_rules) + " rules (" + 
+                                       std::to_string(global_rules) + " global, " + 
+                                       std::to_string(field_rules) + " field)");
+                    
+                    // Check 4: Verify every header has a corresponding FIELD rule
+                    std::vector<std::string> headers_without_rules;
+                    for (const auto& header : output_headers) {
+                        auto it = std::find(field_rule_targets.begin(), field_rule_targets.end(), header);
+                        if (it == field_rule_targets.end()) {
+                            headers_without_rules.push_back(header);
+                        }
+                    }
+                    
+                    if (!headers_without_rules.empty()) {
+                        AnsiOutput::error("  ❌ Headers without corresponding FIELD rules:");
+                        for (const auto& header : headers_without_rules) {
+                            AnsiOutput::error("      - " + header);
+                        }
+                        file_passed = false;
+                    } else {
+                        AnsiOutput::success("  ✅ All headers have corresponding FIELD rules");
+                    }
+                    
+                    // Check 5: Verify every FIELD rule targets an existing header
+                    std::vector<std::string> rules_without_headers;
+                    for (const auto& rule_target : field_rule_targets) {
+                        auto it = std::find(output_headers.begin(), output_headers.end(), rule_target);
+                        if (it == output_headers.end()) {
+                            rules_without_headers.push_back(rule_target);
+                        }
+                    }
+                    
+                    if (!rules_without_headers.empty()) {
+                        AnsiOutput::error("  ❌ FIELD rules targeting non-existent headers:");
+                        for (const auto& rule_target : rules_without_headers) {
+                            AnsiOutput::error("      - " + rule_target);
+                        }
+                        file_passed = false;
+                    } else {
+                        AnsiOutput::success("  ✅ All FIELD rules target existing headers");
+                    }
+                    
                 } catch (const std::exception& e) {
                     AnsiOutput::error("  ❌ Rules file syntax error: " + std::string(e.what()));
                     file_passed = false;
