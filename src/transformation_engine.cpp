@@ -1,4 +1,5 @@
 #include "transformation_engine.h"
+#include "progress_manager.h"
 #include <fstream>
 #include <sstream>
 #include <regex>
@@ -235,6 +236,13 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
     }
     
     // Apply field transformations
+    std::unique_ptr<CustomProgressBar> progress;
+    if (!filtered_rows.empty()) {
+        progress = ProgressManager::create_processing_progress(
+            "Processing data", filtered_rows.size());
+    }
+    
+    size_t row_index = 0;
     for (const auto& input_row : filtered_rows) {
         std::vector<std::string> output_row;
         
@@ -268,6 +276,16 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
         }
         
         result->rows.push_back(output_row);
+        
+        // Update progress periodically
+        row_index++;
+        if (progress && (row_index % 100 == 0 || row_index == filtered_rows.size())) {
+            ProgressManager::update_progress(*progress, row_index);
+        }
+    }
+    
+    if (progress) {
+        ProgressManager::complete_progress(*progress);
     }
     
     return result;
