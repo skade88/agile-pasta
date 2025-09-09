@@ -64,7 +64,7 @@ void TransformationEngine::load_output_headers(const std::filesystem::path& head
 
 std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
     if (output_headers_.empty()) {
-        throw std::runtime_error("No output headers loaded");
+        return nullptr; // Handle gracefully when no headers are loaded
     }
     
     auto result = std::make_unique<QueryResult>();
@@ -91,9 +91,25 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                 const PsvTable* table = database_.get_table(table_name);
                 if (!table) continue;
                 
-                // Check if rule.condition contains any field name
+                // Check if rule.condition contains any field name (with word boundaries)
                 for (const auto& header : table->headers) {
-                    if (rule.condition.find(header) != std::string::npos) {
+                    // Use word boundary search like in field replacement
+                    size_t pos = 0;
+                    bool found_reference = false;
+                    while ((pos = rule.condition.find(header, pos)) != std::string::npos) {
+                        // Make sure it's a whole word (including underscores as part of identifiers)
+                        bool is_start_ok = (pos == 0 || (!std::isalnum(rule.condition[pos-1]) && rule.condition[pos-1] != '_'));
+                        bool is_end_ok = (pos + header.length() == rule.condition.length() || 
+                                         (!std::isalnum(rule.condition[pos + header.length()]) && rule.condition[pos + header.length()] != '_'));
+                        
+                        if (is_start_ok && is_end_ok) {
+                            found_reference = true;
+                            break;
+                        }
+                        pos += header.length();
+                    }
+                    
+                    if (found_reference) {
                         has_input_field_references = true;
                         break;
                     }
@@ -117,7 +133,22 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                 if (rule.type == TransformationRule::RuleType::FIELD) {
                     // Check if rule.condition contains any field name from this table
                     for (const auto& header : table->headers) {
-                        if (rule.condition.find(header) != std::string::npos) {
+                        // Use the same word boundary logic as above
+                        size_t pos = 0;
+                        bool found_reference = false;
+                        while ((pos = rule.condition.find(header, pos)) != std::string::npos) {
+                            bool is_start_ok = (pos == 0 || (!std::isalnum(rule.condition[pos-1]) && rule.condition[pos-1] != '_'));
+                            bool is_end_ok = (pos + header.length() == rule.condition.length() || 
+                                             (!std::isalnum(rule.condition[pos + header.length()]) && rule.condition[pos + header.length()] != '_'));
+                            
+                            if (is_start_ok && is_end_ok) {
+                                found_reference = true;
+                                break;
+                            }
+                            pos += header.length();
+                        }
+                        
+                        if (found_reference) {
                             field_matches++;
                             break; // Count each rule only once per table
                         }
@@ -362,10 +393,10 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
         // Replace all occurrences of the header name with the value
         size_t pos = 0;
         while ((pos = result_expression.find(header, pos)) != std::string::npos) {
-            // Make sure it's a whole word and not part of a placeholder
-            bool is_start_ok = (pos == 0 || !std::isalnum(result_expression[pos-1]));
+            // Make sure it's a whole word and not part of a placeholder (including underscores as part of identifiers)
+            bool is_start_ok = (pos == 0 || (!std::isalnum(result_expression[pos-1]) && result_expression[pos-1] != '_'));
             bool is_end_ok = (pos + header.length() == result_expression.length() || 
-                             !std::isalnum(result_expression[pos + header.length()]));
+                             (!std::isalnum(result_expression[pos + header.length()]) && result_expression[pos + header.length()] != '_'));
             
             // Also check it's not part of a string literal placeholder
             bool is_in_placeholder = false;
@@ -398,16 +429,29 @@ std::string TransformationEngine::apply_rule(const TransformationRule& rule,
     
     // Handle simple expressions
     if (result_expression.find(" + ") != std::string::npos) {
-        // String concatenation - be more careful about what we trim
+        // String concatenation - be more careful about preserving spaces in quotes
         std::stringstream ss(result_expression);
         std::string part;
         std::string result;
         
         while (std::getline(ss, part, '+')) {
-            // Only trim whitespace, not quotes - the quotes should already be handled by string literal processing
-            part.erase(0, part.find_first_not_of(" \t"));
-            part.erase(part.find_last_not_of(" \t") + 1);
-            result += part;
+            // Check if this part is all whitespace but not empty
+            bool is_whitespace_only = !part.empty() && 
+                                      std::all_of(part.begin(), part.end(), [](char c) { return std::isspace(c); });
+            
+            if (is_whitespace_only) {
+                // This might be a space literal, preserve it as a single space
+                result += " ";
+            } else {
+                // Normal trimming for non-whitespace parts
+                part.erase(0, part.find_first_not_of(" \t"));
+                part.erase(part.find_last_not_of(" \t") + 1);
+                
+                // Don't process empty parts (this can happen with multiple + operators)
+                if (!part.empty()) {
+                    result += part;
+                }
+            }
         }
         
         return result;
