@@ -67,6 +67,9 @@ private:
     // Move cursor to specific progress bar position and update it
     void update_progress_at_position(size_t position, const std::string& rendered_bar);
     
+    // Move cursor to the summary section for final output
+    void move_cursor_to_summary_section();
+    
     size_t input_file_count_;
     size_t output_file_count_;
     bool ui_initialized_ = false;

@@ -42,21 +42,28 @@ void UICoordinator::initialize_ui() {
     
     AnsiOutput::info("\nLoading data files...");
     
-    // Display initial progress bars at 0%
-    for (auto& file_info : file_progress_bars_) {
+    // Display initial progress bars at 0% and record their positions
+    files_section_start_ = 2; // Account for header
+    for (size_t i = 0; i < file_progress_bars_.size(); ++i) {
+        auto& file_info = file_progress_bars_[i];
         file_info.progress_bar->set_progress(0);
         file_info.progress_bar->display();
         std::cout << std::endl;
     }
     
-    AnsiOutput::info("\nOutput file generation:");
+    std::cout << std::endl;
+    AnsiOutput::info("Output file generation:");
     
-    for (auto& output_info : output_progress_bars_) {
+    outputs_section_start_ = files_section_start_ + file_progress_bars_.size() + 2;
+    for (size_t i = 0; i < output_progress_bars_.size(); ++i) {
+        auto& output_info = output_progress_bars_[i];
         output_info.progress_bar->set_progress(0);
         output_info.progress_bar->display();
         std::cout << std::endl;
     }
     
+    total_display_lines_ = outputs_section_start_ + output_progress_bars_.size();
+    std::cout << std::endl; // Add spacing for summary
     ui_initialized_ = true;
 }
 
@@ -64,6 +71,10 @@ void UICoordinator::update_file_progress(const std::string& filename, size_t cur
     auto* info = find_file_progress(filename);
     if (info && !info->completed) {
         info->progress_bar->set_progress(current);
+        
+        // Update display in-place using cursor positioning
+        size_t position = files_section_start_ + (info - &file_progress_bars_[0]);
+        update_progress_at_position(position, info->progress_bar->render());
     }
 }
 
@@ -72,6 +83,10 @@ void UICoordinator::complete_file_progress(const std::string& filename) {
     if (info) {
         info->progress_bar->mark_as_completed();
         info->completed = true;
+        
+        // Update display in-place
+        size_t position = files_section_start_ + (info - &file_progress_bars_[0]);
+        update_progress_at_position(position, info->progress_bar->render());
     }
 }
 
@@ -86,6 +101,10 @@ void UICoordinator::update_output_progress(const std::string& output_name, size_
     auto* info = find_output_progress(output_name);
     if (info && !info->completed) {
         info->progress_bar->set_progress(current);
+        
+        // Update display in-place
+        size_t position = outputs_section_start_ + (info - &output_progress_bars_[0]);
+        update_progress_at_position(position, info->progress_bar->render());
     }
 }
 
@@ -95,11 +114,17 @@ void UICoordinator::complete_output_progress(const std::string& output_name, siz
         info->progress_bar->mark_as_completed();
         info->completed = true;
         info->records_written = records_written;
+        
+        // Update display in-place
+        size_t position = outputs_section_start_ + (info - &output_progress_bars_[0]);
+        update_progress_at_position(position, info->progress_bar->render());
     }
 }
 
 void UICoordinator::display_summary(size_t total_records_loaded) {
-    std::cout << std::endl;
+    // Move cursor to the summary section (past all progress bars)
+    move_cursor_to_summary_section();
+    
     AnsiOutput::success("Loaded " + std::to_string(total_records_loaded) + 
                        " total records from " + std::to_string(input_file_count_) + " files.");
     
@@ -141,8 +166,31 @@ void UICoordinator::update_progress_at_position(size_t position, const std::stri
         return; // Don't update progress bars when output is redirected
     }
     
-    // Move cursor to the specific line and update
+    // Use mutex to ensure thread-safe cursor operations
+    std::lock_guard<std::mutex> lock(CustomProgressBar::get_display_mutex());
+    
+    // Save current cursor position, move to target line, update, and restore
+    std::cout << "\033[s";  // Save cursor position
     std::cout << "\033[" << (position + 1) << ";1H";  // Move to line (1-indexed)
     std::cout << "\033[K";  // Clear line
-    std::cout << "\r" << rendered_bar << std::flush;
+    std::cout << rendered_bar << std::flush;
+    std::cout << "\033[u";  // Restore cursor position
+}
+
+void UICoordinator::move_cursor_to_summary_section() {
+    // Check if we're outputting to a terminal
+    bool is_terminal = false;
+#if defined(_WIN32) || defined(_WIN64)
+    is_terminal = _isatty(_fileno(stdout));
+#else
+    is_terminal = isatty(STDOUT_FILENO);
+#endif
+    
+    if (!is_terminal) {
+        std::cout << std::endl;
+        return;
+    }
+    
+    // Move cursor to the summary section (past all progress bars)
+    std::cout << "\033[" << (total_display_lines_ + 2) << ";1H";
 }
