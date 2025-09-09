@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <mutex>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -11,6 +12,9 @@
 #else
 #include <unistd.h>
 #endif
+
+// Static mutex definition for thread-safe progress bar display
+std::mutex CustomProgressBar::display_mutex_;
 
 CustomProgressBar::CustomProgressBar(const Config& config) 
     : config_(config), start_time_(std::chrono::steady_clock::now()) {
@@ -139,6 +143,9 @@ std::string CustomProgressBar::render() const {
 }
 
 void CustomProgressBar::display() const {
+    // Use lock guard to ensure thread-safe progress bar display
+    std::lock_guard<std::mutex> lock(display_mutex_);
+    
     // Check if we're outputting to a terminal (not being redirected)
     bool is_terminal = false;
 #if defined(_WIN32) || defined(_WIN64)

@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <chrono>
+#include <mutex>
 
 // Custom progress bar implementation using ANSI/VT escape sequences
 // to replace the external indicators library
@@ -65,6 +66,10 @@ protected:
     
     // Clear the current line
     void clear_line() const;
+
+private:
+    // Static mutex for thread-safe progress bar display
+    static std::mutex display_mutex_;
 };
 
 // Block-style progress bar (simpler, no detailed progress info)
