@@ -1,0 +1,5 @@
+GLOBAL|Join FileA.dept_id = FileB.dept_id|Join employees with their departments
+FIELD|employee_name|FileA.emp_name|Copy employee name from FileA
+FIELD|department_name|FileB.dept_name|Copy department name from FileB  
+FIELD|employee_position|FileA.position|Copy employee position from FileA
+FIELD|department_budget|FileB.budget|Copy department budget from FileB
