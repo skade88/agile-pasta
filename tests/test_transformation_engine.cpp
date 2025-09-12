@@ -171,6 +171,53 @@ TEST_F(TransformationEngineTest, TransformDataWithStringFunctions) {
     EXPECT_EQ(result->rows[0][2], "Doe");         // TITLE(last_name)
 }
 
+TEST_F(TransformationEngineTest, TransformDataWithTrimFunction) {
+    // Create a test with data that has whitespace that needs trimming
+    database.clear();
+    
+    auto test_table = std::make_unique<PsvTable>();
+    test_table->name = "test_data";
+    test_table->headers = {"name_with_spaces", "dept_with_tabs", "notes_with_newlines"};
+    
+    PsvRecord rec1; rec1.fields = {"  John Doe  ", "\tEngineering\t", "Good employee\r\n"};
+    PsvRecord rec2; rec2.fields = {" Jane Smith ", " \tMarketing\t ", " \r\nExcellent worker \n "};
+    PsvRecord rec3; rec3.fields = {"", "   ", "\t\r\n"};  // Edge cases: empty and whitespace-only
+    
+    test_table->records = {rec1, rec2, rec3};
+    test_table->build_header_index();
+    
+    database.load_table(std::move(test_table));
+    
+    createTestFile("headers.psv", "trimmed_name|trimmed_dept|trimmed_notes");
+    createTestFile("rules.psv", 
+        "FIELD|trimmed_name|TRIM(name_with_spaces)|Trim whitespace from name\n"
+        "FIELD|trimmed_dept|TRIM(dept_with_tabs)|Trim whitespace from department\n"
+        "FIELD|trimmed_notes|TRIM(notes_with_newlines)|Trim whitespace from notes");
+    
+    transformation_engine->load_output_headers(test_dir / "headers.psv");
+    transformation_engine->load_rules(test_dir / "rules.psv");
+    
+    auto result = transformation_engine->transform_data();
+    
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->rows.size(), 3);
+    
+    // Check first record transformations
+    EXPECT_EQ(result->rows[0][0], "John Doe");        // TRIM("  John Doe  ")
+    EXPECT_EQ(result->rows[0][1], "Engineering");     // TRIM("\tEngineering\t")
+    EXPECT_EQ(result->rows[0][2], "Good employee");   // TRIM("Good employee\r\n")
+    
+    // Check second record transformations
+    EXPECT_EQ(result->rows[1][0], "Jane Smith");      // TRIM(" Jane Smith ")
+    EXPECT_EQ(result->rows[1][1], "Marketing");       // TRIM(" \tMarketing\t ")
+    EXPECT_EQ(result->rows[1][2], "Excellent worker"); // TRIM(" \r\nExcellent worker \n ")
+    
+    // Check edge cases (empty and whitespace-only strings)
+    EXPECT_EQ(result->rows[2][0], "");                // TRIM("") -> ""
+    EXPECT_EQ(result->rows[2][1], "");                // TRIM("   ") -> ""
+    EXPECT_EQ(result->rows[2][2], "");                // TRIM("\t\r\n") -> ""
+}
+
 TEST_F(TransformationEngineTest, TransformDataWithMissingField) {
     createTestFile("headers.psv", "employee_name|nonexistent_field");
     createTestFile("rules.psv", 
