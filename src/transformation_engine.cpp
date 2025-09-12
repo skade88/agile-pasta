@@ -77,67 +77,79 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
         return result; // Empty result
     }
     
-    // For now, use only the first table that has all required input fields
-    // In a more sophisticated implementation, this could use JOIN operations
+    // Check for JOIN and UNION operations in GLOBAL rules
     std::unique_ptr<QueryResult> source_data;
     std::vector<std::string> source_headers;
     
-    // Check if we have any field rules that reference input fields
-    bool has_input_field_references = false;
+    // First, check if we have any JOIN or UNION operations
+    bool has_join_operations = false;
+    bool has_union_operations = false;
     for (const auto& rule : rules_) {
-        if (rule.type == TransformationRule::RuleType::FIELD) {
-            // Check if the rule condition references any input field
-            // This includes direct field references, complex expressions, and if-else conditions
-            for (const auto& table_name : table_names) {
-                const PsvTable* table = database_.get_table(table_name);
-                if (!table) continue;
-                
-                // Check if rule.condition contains any field name (with word boundaries)
-                for (const auto& header : table->headers) {
-                    // Use word boundary search like in field replacement
-                    size_t pos = 0;
-                    bool found_reference = false;
-                    while ((pos = rule.condition.find(header, pos)) != std::string::npos) {
-                        // Make sure it's a whole word (including underscores as part of identifiers)
-                        bool is_start_ok = (pos == 0 || (!std::isalnum(rule.condition[pos-1]) && rule.condition[pos-1] != '_'));
-                        bool is_end_ok = (pos + header.length() == rule.condition.length() || 
-                                         (!std::isalnum(rule.condition[pos + header.length()]) && rule.condition[pos + header.length()] != '_'));
-                        
-                        if (is_start_ok && is_end_ok) {
-                            found_reference = true;
-                            break;
-                        }
-                        pos += header.length();
-                    }
-                    
-                    if (found_reference) {
-                        has_input_field_references = true;
-                        break;
-                    }
-                }
-                if (has_input_field_references) break;
-            }
-            if (has_input_field_references) break;
+        if (rule.type == TransformationRule::RuleType::GLOBAL_JOIN) {
+            has_join_operations = true;
+        } else if (rule.type == TransformationRule::RuleType::GLOBAL_UNION) {
+            has_union_operations = true;
         }
     }
     
-    // If we have input field references, find a suitable source table
-    if (has_input_field_references) {
-        // Try to find a table that contains most of the fields we need
-        for (const auto& table_name : table_names) {
-            const PsvTable* table = database_.get_table(table_name);
-            if (!table) continue;
-            
-            // Count how many of our required fields are in this table
-            int field_matches = 0;
-            for (const auto& rule : rules_) {
-                if (rule.type == TransformationRule::RuleType::FIELD) {
-                    // Check if rule.condition contains any field name from this table
+    if (has_join_operations || has_union_operations) {
+        // Execute JOIN and UNION operations first
+        for (const auto& rule : rules_) {
+            if (rule.type == TransformationRule::RuleType::GLOBAL_JOIN) {
+                // Build join condition string for the query engine
+                std::string join_condition = rule.left_field + " = " + rule.right_field;
+                
+                if (!source_data) {
+                    // First join operation
+                    source_data = query_engine_.join(rule.left_table, rule.right_table, join_condition, JoinType::INNER);
+                    if (source_data) {
+                        source_headers = source_data->headers;
+                    }
+                } else {
+                    // Additional joins would require more complex logic
+                    // For now, we support only one join operation
+                    std::cerr << "Warning: Multiple JOIN operations not yet supported. Using first JOIN only." << std::endl;
+                    break;
+                }
+            } else if (rule.type == TransformationRule::RuleType::GLOBAL_UNION) {
+                if (!source_data) {
+                    // First union operation
+                    source_data = query_engine_.union_tables(rule.union_tables);
+                    if (source_data) {
+                        source_headers = source_data->headers;
+                    }
+                } else {
+                    // Additional operations would require more complex logic
+                    std::cerr << "Warning: Multiple UNION operations not yet supported. Using first UNION only." << std::endl;
+                    break;
+                }
+            }
+        }
+        
+        if (!source_data) {
+            std::cerr << "Warning: JOIN/UNION operation failed." << std::endl;
+            return result; // Empty result
+        }
+    } else {
+        // No JOIN operations, use existing logic to find source table
+        
+        // Check if we have any field rules that reference input fields
+        bool has_input_field_references = false;
+        for (const auto& rule : rules_) {
+            if (rule.type == TransformationRule::RuleType::FIELD) {
+                // Check if the rule condition references any input field
+                // This includes direct field references, complex expressions, and if-else conditions
+                for (const auto& table_name : table_names) {
+                    const PsvTable* table = database_.get_table(table_name);
+                    if (!table) continue;
+                    
+                    // Check if rule.condition contains any field name (with word boundaries)
                     for (const auto& header : table->headers) {
-                        // Use the same word boundary logic as above
+                        // Use word boundary search like in field replacement
                         size_t pos = 0;
                         bool found_reference = false;
                         while ((pos = rule.condition.find(header, pos)) != std::string::npos) {
+                            // Make sure it's a whole word (including underscores as part of identifiers)
                             bool is_start_ok = (pos == 0 || (!std::isalnum(rule.condition[pos-1]) && rule.condition[pos-1] != '_'));
                             bool is_end_ok = (pos + header.length() == rule.condition.length() || 
                                              (!std::isalnum(rule.condition[pos + header.length()]) && rule.condition[pos + header.length()] != '_'));
@@ -150,34 +162,74 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                         }
                         
                         if (found_reference) {
-                            field_matches++;
-                            break; // Count each rule only once per table
+                            has_input_field_references = true;
+                            break;
                         }
                     }
+                    if (has_input_field_references) break;
                 }
-            }
-            
-            // Use this table if it has the most matches
-            if (field_matches > 0) {
-                source_data = query_engine_.select(table_name);
-                source_headers = table->headers;
-                break; // Use first matching table for now
+                if (has_input_field_references) break;
             }
         }
         
-        if (!source_data) {
-            return result; // No suitable source data
+        // If we have input field references, find a suitable source table
+        if (has_input_field_references) {
+            // Try to find a table that contains most of the fields we need
+            for (const auto& table_name : table_names) {
+                const PsvTable* table = database_.get_table(table_name);
+                if (!table) continue;
+                
+                // Count how many of our required fields are in this table
+                int field_matches = 0;
+                for (const auto& rule : rules_) {
+                    if (rule.type == TransformationRule::RuleType::FIELD) {
+                        // Check if rule.condition contains any field name from this table
+                        for (const auto& header : table->headers) {
+                            // Use the same word boundary logic as above
+                            size_t pos = 0;
+                            bool found_reference = false;
+                            while ((pos = rule.condition.find(header, pos)) != std::string::npos) {
+                                bool is_start_ok = (pos == 0 || (!std::isalnum(rule.condition[pos-1]) && rule.condition[pos-1] != '_'));
+                                bool is_end_ok = (pos + header.length() == rule.condition.length() || 
+                                                 (!std::isalnum(rule.condition[pos + header.length()]) && rule.condition[pos + header.length()] != '_'));
+                                
+                                if (is_start_ok && is_end_ok) {
+                                    found_reference = true;
+                                    break;
+                                }
+                                pos += header.length();
+                            }
+                            
+                            if (found_reference) {
+                                field_matches++;
+                                break; // Count each rule only once per table
+                            }
+                        }
+                    }
+                }
+                
+                // Use this table if it has the most matches
+                if (field_matches > 0) {
+                    source_data = query_engine_.select(table_name);
+                    source_headers = table->headers;
+                    break; // Use first matching table for now
+                }
+            }
+            
+            if (!source_data) {
+                return result; // No suitable source data
+            }
+        } else {
+            // All field rules are static (no input field references)
+            // Create a single empty row to process static rules
+            source_data = std::make_unique<QueryResult>();
+            source_data->headers = {};
+            source_data->rows = {{}};  // Single empty row
+            source_headers = {};
         }
-    } else {
-        // All field rules are static (no input field references)
-        // Create a single empty row to process static rules
-        source_data = std::make_unique<QueryResult>();
-        source_data->headers = {};
-        source_data->rows = {{}};  // Single empty row
-        source_headers = {};
     }
     
-    // Apply global rules (filtering)
+    // Apply global rules (filtering) - skip JOIN and UNION rules as they were already processed
     std::vector<std::vector<std::string>> filtered_rows;
     
     for (const auto& row : source_data->rows) {
@@ -190,6 +242,7 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                     break;
                 }
             }
+            // Skip GLOBAL_JOIN and GLOBAL_UNION rules as they were already processed
         }
         
         if (passes_global_filters) {
@@ -319,6 +372,48 @@ TransformationRule TransformationEngine::parse_rule(const std::string& rule_text
     if (parts[0] == "GLOBAL") {
         rule.type = TransformationRule::RuleType::GLOBAL;
         rule.condition = parts[1];
+        
+        // Check if this is a JOIN operation
+        if (parts[1].find("Join ") == 0) {
+            rule.type = TransformationRule::RuleType::GLOBAL_JOIN;
+            
+            // Parse JOIN syntax: "Join table1.field = table2.field"
+            std::string join_condition = parts[1].substr(5); // Remove "Join "
+            
+            // Use regex to parse: "table1.field = table2.field"
+            std::regex join_regex(R"((\w+)\.(\w+)\s*=\s*(\w+)\.(\w+))");
+            std::smatch match;
+            
+            if (std::regex_match(join_condition, match, join_regex)) {
+                rule.left_table = match[1].str();
+                rule.left_field = match[2].str();
+                rule.right_table = match[3].str();
+                rule.right_field = match[4].str();
+            } else {
+                throw std::runtime_error("Invalid JOIN syntax: " + parts[1]);
+            }
+        }
+        // Check if this is a UNION operation
+        else if (parts[1].find("Union ") == 0) {
+            rule.type = TransformationRule::RuleType::GLOBAL_UNION;
+            
+            // Parse UNION syntax: "Union table1,table2,table3"
+            std::string union_tables_str = parts[1].substr(6); // Remove "Union "
+            
+            // Split by comma
+            std::stringstream ss(union_tables_str);
+            std::string table;
+            while (std::getline(ss, table, ',')) {
+                // Trim whitespace
+                table.erase(0, table.find_first_not_of(" \t"));
+                table.erase(table.find_last_not_of(" \t") + 1);
+                rule.union_tables.push_back(table);
+            }
+            
+            if (rule.union_tables.empty()) {
+                throw std::runtime_error("Invalid UNION syntax: " + parts[1]);
+            }
+        }
         // parts[2] is description (ignored for now)
     } else if (parts[0] == "FIELD") {
         rule.type = TransformationRule::RuleType::FIELD;
