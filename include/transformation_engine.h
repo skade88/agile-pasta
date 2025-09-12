@@ -8,9 +8,10 @@
 
 struct TransformationRule {
     enum class RuleType {
-        GLOBAL,     // Applied to all fields
-        FIELD,      // Applied to specific field
-        GLOBAL_JOIN // JOIN operation in GLOBAL rules
+        GLOBAL,      // Applied to all fields
+        FIELD,       // Applied to specific field
+        GLOBAL_JOIN, // JOIN operation in GLOBAL rules
+        GLOBAL_UNION // UNION operation in GLOBAL rules
     };
     
     RuleType type;
@@ -18,11 +19,12 @@ struct TransformationRule {
     std::string condition;   // Rule condition/expression
     std::string target_field; // Output field name
     
-    // For JOIN rules
+    // For JOIN and UNION rules
     std::string left_table;
     std::string right_table;
     std::string left_field;
     std::string right_field;
+    std::vector<std::string> union_tables; // For UNION operations
 };
 
 class TransformationEngine {

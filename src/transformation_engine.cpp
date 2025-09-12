@@ -77,21 +77,23 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
         return result; // Empty result
     }
     
-    // Check for JOIN operations in GLOBAL rules
+    // Check for JOIN and UNION operations in GLOBAL rules
     std::unique_ptr<QueryResult> source_data;
     std::vector<std::string> source_headers;
     
-    // First, check if we have any JOIN operations
+    // First, check if we have any JOIN or UNION operations
     bool has_join_operations = false;
+    bool has_union_operations = false;
     for (const auto& rule : rules_) {
         if (rule.type == TransformationRule::RuleType::GLOBAL_JOIN) {
             has_join_operations = true;
-            break;
+        } else if (rule.type == TransformationRule::RuleType::GLOBAL_UNION) {
+            has_union_operations = true;
         }
     }
     
-    if (has_join_operations) {
-        // Execute JOIN operations first
+    if (has_join_operations || has_union_operations) {
+        // Execute JOIN and UNION operations first
         for (const auto& rule : rules_) {
             if (rule.type == TransformationRule::RuleType::GLOBAL_JOIN) {
                 // Build join condition string for the query engine
@@ -109,11 +111,23 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                     std::cerr << "Warning: Multiple JOIN operations not yet supported. Using first JOIN only." << std::endl;
                     break;
                 }
+            } else if (rule.type == TransformationRule::RuleType::GLOBAL_UNION) {
+                if (!source_data) {
+                    // First union operation
+                    source_data = query_engine_.union_tables(rule.union_tables);
+                    if (source_data) {
+                        source_headers = source_data->headers;
+                    }
+                } else {
+                    // Additional operations would require more complex logic
+                    std::cerr << "Warning: Multiple UNION operations not yet supported. Using first UNION only." << std::endl;
+                    break;
+                }
             }
         }
         
         if (!source_data) {
-            std::cerr << "Warning: JOIN operation failed." << std::endl;
+            std::cerr << "Warning: JOIN/UNION operation failed." << std::endl;
             return result; // Empty result
         }
     } else {
@@ -215,7 +229,7 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
         }
     }
     
-    // Apply global rules (filtering) - skip JOIN rules as they were already processed
+    // Apply global rules (filtering) - skip JOIN and UNION rules as they were already processed
     std::vector<std::vector<std::string>> filtered_rows;
     
     for (const auto& row : source_data->rows) {
@@ -228,7 +242,7 @@ std::unique_ptr<QueryResult> TransformationEngine::transform_data() {
                     break;
                 }
             }
-            // Skip GLOBAL_JOIN rules as they were already processed
+            // Skip GLOBAL_JOIN and GLOBAL_UNION rules as they were already processed
         }
         
         if (passes_global_filters) {
@@ -377,6 +391,27 @@ TransformationRule TransformationEngine::parse_rule(const std::string& rule_text
                 rule.right_field = match[4].str();
             } else {
                 throw std::runtime_error("Invalid JOIN syntax: " + parts[1]);
+            }
+        }
+        // Check if this is a UNION operation
+        else if (parts[1].find("Union ") == 0) {
+            rule.type = TransformationRule::RuleType::GLOBAL_UNION;
+            
+            // Parse UNION syntax: "Union table1,table2,table3"
+            std::string union_tables_str = parts[1].substr(6); // Remove "Union "
+            
+            // Split by comma
+            std::stringstream ss(union_tables_str);
+            std::string table;
+            while (std::getline(ss, table, ',')) {
+                // Trim whitespace
+                table.erase(0, table.find_first_not_of(" \t"));
+                table.erase(table.find_last_not_of(" \t") + 1);
+                rule.union_tables.push_back(table);
+            }
+            
+            if (rule.union_tables.empty()) {
+                throw std::runtime_error("Invalid UNION syntax: " + parts[1]);
             }
         }
         // parts[2] is description (ignored for now)

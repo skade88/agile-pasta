@@ -1,0 +1,2 @@
+GLOBAL|Union FileA,FileB|Combine all records from FileA and FileB
+FIELD|all_employee_names|emp_name|Get names from FileA (will be empty for FileB records)
